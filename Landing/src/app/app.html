@@ -1,186 +1,542 @@
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-<!-- * * * * * * * * * * * The content below * * * * * * * * * * * -->
-<!-- * * * * * * * * * * is only a placeholder * * * * * * * * * * -->
-<!-- * * * * * * * * * * and can be replaced.  * * * * * * * * * * -->
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-<!-- * * * * * * * * * Delete the template below * * * * * * * * * -->
-<!-- * * * * * * * to get started with your project! * * * * * * * -->
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
+<div class="page">
+  <header class="navbar" [class.scrolled]="isScrolled">
+    <div class="container nav-row">
+      <a class="brand" href="#top">
+        <span class="brand-mark">K</span>
+        <span class="brand-name">Kustomizer</span>
+      </a>
 
-<style>
-  :host {
-    --bright-blue: oklch(51.01% 0.274 263.83);
-    --electric-violet: oklch(53.18% 0.28 296.97);
-    --french-violet: oklch(47.66% 0.246 305.88);
-    --vivid-pink: oklch(69.02% 0.277 332.77);
-    --hot-red: oklch(61.42% 0.238 15.34);
-    --orange-red: oklch(63.32% 0.24 31.68);
+      <nav class="nav-links">
+        <a *ngFor="let link of navLinks" [href]="link.href">{{ link.label }}</a>
+      </nav>
 
-    --gray-900: oklch(19.37% 0.006 300.98);
-    --gray-700: oklch(36.98% 0.014 302.71);
-    --gray-400: oklch(70.9% 0.015 304.04);
+      <div class="nav-actions">
+        <a class="btn ghost" href="#waitlist">Join Pilot</a>
+        <a class="btn primary" href="#demo">Book a Demo</a>
+      </div>
 
-    --red-to-pink-to-purple-vertical-gradient: linear-gradient(
-      180deg,
-      var(--orange-red) 0%,
-      var(--vivid-pink) 50%,
-      var(--electric-violet) 100%
-    );
+      <button class="nav-toggle" type="button" (click)="toggleMobileMenu()" aria-label="Toggle menu">
+        <svg *ngIf="!mobileMenuOpen" class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="'menu' | iconSvg">
+        </svg>
+        <svg *ngIf="mobileMenuOpen" class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="'x' | iconSvg">
+        </svg>
+      </button>
+    </div>
 
-    --red-to-pink-to-purple-horizontal-gradient: linear-gradient(
-      90deg,
-      var(--orange-red) 0%,
-      var(--vivid-pink) 50%,
-      var(--electric-violet) 100%
-    );
+    <div class="mobile-menu" *ngIf="mobileMenuOpen">
+      <a *ngFor="let link of navLinks" [href]="link.href" (click)="closeMobileMenu()">
+        {{ link.label }}
+      </a>
+      <div class="mobile-actions">
+        <a class="btn block ghost" href="#waitlist" (click)="closeMobileMenu()">Join Pilot</a>
+        <a class="btn block primary" href="#demo" (click)="closeMobileMenu()">Book a Demo</a>
+      </div>
+    </div>
+  </header>
 
-    --pill-accent: var(--bright-blue);
+  <main id="top">
+    <section class="section hero">
+      <div class="container hero-grid">
+        <div class="hero-text">
+          <div class="pill live">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" [innerHTML]="'sparkles' | iconSvg"></svg>
+            Now in private pilot for Angular SSR storefronts
+          </div>
+          <h1>
+            Visual editing for headless commerce —
+            <span class="gradient-text">without sacrificing performance.</span>
+          </h1>
+          <p class="lead">
+            Get Shopify-like editing power on headless storefronts. Works with your
+            <strong>real Angular components</strong>, persists to
+            <strong>Shopify natively</strong>, and adds <strong>zero runtime overhead</strong>.
+          </p>
 
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-      Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-      "Segoe UI Symbol";
-    box-sizing: border-box;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+          <ul class="benefit-list">
+            <li *ngFor="let benefit of benefits">
+              <span class="icon-circle">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" [innerHTML]="benefit.icon | iconSvg"></svg>
+              </span>
+              <span>{{ benefit.text }}</span>
+            </li>
+          </ul>
 
-  h1 {
-    font-size: 3.125rem;
-    color: var(--gray-900);
-    font-weight: 500;
-    line-height: 100%;
-    letter-spacing: -0.125rem;
-    margin: 0;
-    font-family: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-      Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-      "Segoe UI Symbol";
-  }
+          <div class="cta-row">
+            <a class="btn primary" href="#demo">Book a Demo</a>
+            <a class="btn outline" href="#waitlist">Join the Pilot</a>
+          </div>
 
-  p {
-    margin: 0;
-    color: var(--gray-700);
-  }
+          <p class="note">
+            <span class="icon-circle">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" [innerHTML]="'check' | iconSvg"></svg>
+            </span>
+            Designed for Shopify Plus teams going headless
+          </p>
+        </div>
 
-  main {
-    width: 100%;
-    min-height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 1rem;
-    box-sizing: inherit;
-    position: relative;
-  }
+        <div class="hero-visual">
+          <div class="editor-card">
+            <div class="editor-header">
+              <div class="header-left">
+                <span class="dot red"></span>
+                <span class="dot amber"></span>
+                <span class="dot green"></span>
+                <span class="label">Kustomizer Editor</span>
+              </div>
+              <div class="header-actions">
+                <span class="badge">Draft</span>
+                <button class="tiny-btn ghost" type="button">Preview</button>
+                <button class="tiny-btn primary" type="button">Publish</button>
+              </div>
+            </div>
 
-  .angular-logo {
-    max-width: 9.2rem;
-  }
+            <div class="editor-body">
+              <aside class="editor-sidebar">
+                <p class="sidebar-label">Sections</p>
+                <button class="sidebar-item active" type="button">Hero Banner</button>
+                <button class="sidebar-item" type="button">Featured Products</button>
+                <button class="sidebar-item" type="button">Promo Grid</button>
+                <button class="sidebar-item" type="button">Newsletter</button>
+              </aside>
 
-  .content {
-    display: flex;
-    justify-content: space-around;
-    width: 100%;
-    max-width: 700px;
-    margin-bottom: 3rem;
-  }
+              <div class="editor-preview">
+                <div class="preview-box">
+                  <div class="skeleton title"></div>
+                  <div class="skeleton line"></div>
+                  <div class="skeleton line short"></div>
+                  <div class="button-row">
+                    <div class="skeleton button primary"></div>
+                    <div class="skeleton button"></div>
+                  </div>
+                </div>
+                <p class="preview-hint">Click to edit Hero Banner</p>
+              </div>
+            </div>
+          </div>
+          <div class="glow one"></div>
+          <div class="glow two"></div>
+        </div>
+      </div>
+    </section>
 
-  .content h1 {
-    margin-top: 1.75rem;
-  }
+    <section class="section trust">
+      <div class="container">
+        <p class="eyebrow">Trusted by teams building on Shopify Plus</p>
+        <div class="logo-grid">
+          <span class="logo-pill" *ngFor="let logo of trustLogos">{{ logo }}</span>
+        </div>
+      </div>
+    </section>
 
-  .content p {
-    margin-top: 1.5rem;
-  }
+    <section id="problem" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div class="pill danger">The Problem</div>
+          <h2>
+            Headless improved performance.<br />
+            <span class="muted">It also killed your visual editor.</span>
+          </h2>
+          <p class="lead">
+            Brands move to headless for speed, flexibility, and better UX. But they lose the intuitive
+            visual editing that made Shopify so powerful. Suddenly, management teams are filing Jira tickets
+            for a banner change.
+          </p>
+        </div>
 
-  .divider {
-    width: 1px;
-    background: var(--red-to-pink-to-purple-vertical-gradient);
-    margin-inline: 0.5rem;
-  }
+        <div class="card-grid two">
+          <article class="info-card" *ngFor="let point of painPoints">
+            <div class="icon-pill alert">
+              <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                stroke-linecap="round" stroke-linejoin="round" [innerHTML]="point.icon | iconSvg"></svg>
+            </div>
+            <h3>{{ point.title }}</h3>
+            <p>{{ point.description }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
 
-  .pill-group {
-    display: flex;
-    flex-direction: column;
-    align-items: start;
-    flex-wrap: wrap;
-    gap: 1.25rem;
-  }
+    <section id="product" class="section muted">
+      <div class="container">
+        <div class="section-head">
+          <div class="pill primary">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" [innerHTML]="'sparkles' | iconSvg"></svg>
+            The Solution
+          </div>
+          <h2>Meet <span class="gradient-text">Kustomizer</span></h2>
+          <p class="lead">
+            Kustomizer is <strong>the visual layer for headless storefronts</strong>.
+            Management teams edit real sections and components visually — the same ones your developers built.
+            Content persists directly to Shopify. No proprietary runtime. No vendor lock-in. No performance hit.
+          </p>
+        </div>
 
-  .pill {
-    display: flex;
-    align-items: center;
-    --pill-accent: var(--bright-blue);
-    background: color-mix(in srgb, var(--pill-accent) 5%, transparent);
-    color: var(--pill-accent);
-    padding-inline: 0.75rem;
-    padding-block: 0.375rem;
-    border-radius: 2.75rem;
-    border: 0;
-    transition: background 0.3s ease;
-    font-family: var(--inter-font);
-    font-size: 0.875rem;
-    font-style: normal;
-    font-weight: 500;
-    line-height: 1.4rem;
-    letter-spacing: -0.00875rem;
-    text-decoration: none;
-    white-space: nowrap;
-  }
+        <div class="highlight-card">
+          <p>
+            Use your existing Angular components, let content teams publish confidently, and keep Core Web
+            Vitals intact with SSR-friendly output.
+          </p>
+        </div>
 
-  .pill:hover {
-    background: color-mix(in srgb, var(--pill-accent) 15%, transparent);
-  }
+        <div class="pillars">
+          <div class="pillar" *ngFor="let item of solutionPillars">
+            <h3>{{ item.label }}</h3>
+            <p>{{ item.sublabel }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  .pill-group .pill:nth-child(6n + 1) {
-    --pill-accent: var(--bright-blue);
-  }
-  .pill-group .pill:nth-child(6n + 2) {
-    --pill-accent: var(--electric-violet);
-  }
-  .pill-group .pill:nth-child(6n + 3) {
-    --pill-accent: var(--french-violet);
-  }
+    <section id="how-it-works" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div class="pill primary">How It Works</div>
+          <h2>Up and running in three steps</h2>
+          <p class="lead">
+            From connection to first publish — no major refactoring, no new runtime dependencies.
+          </p>
+        </div>
 
-  .pill-group .pill:nth-child(6n + 4),
-  .pill-group .pill:nth-child(6n + 5),
-  .pill-group .pill:nth-child(6n + 6) {
-    --pill-accent: var(--hot-red);
-  }
+        <div class="step-grid">
+          <article class="step-card" *ngFor="let step of steps">
+            <div class="step-number">{{ step.number }}</div>
+            <div class="icon-pill primary soft">
+              <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                stroke-linecap="round" stroke-linejoin="round" [innerHTML]="step.icon | iconSvg"></svg>
+            </div>
+            <h3>{{ step.title }}</h3>
+            <p>{{ step.description }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
 
-  .pill-group svg {
-    margin-inline-start: 0.25rem;
-  }
+    <section class="section muted">
+      <div class="container">
+        <div class="section-head">
+          <div class="pill primary">V1 Features</div>
+          <h2>Everything you need to ship faster</h2>
+          <p class="lead">
+            Built for Home and Campaign Landing pages. Visual editing that respects your existing architecture.
+          </p>
+        </div>
 
-  .social-links {
-    display: flex;
-    align-items: center;
-    gap: 0.73rem;
-    margin-top: 1.5rem;
-  }
+        <div class="card-grid three">
+          <article class="info-card" *ngFor="let feature of features">
+            <div class="icon-pill primary">
+              <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                stroke-linecap="round" stroke-linejoin="round" [innerHTML]="feature.icon | iconSvg"></svg>
+            </div>
+            <h3>{{ feature.title }}</h3>
+            <p>{{ feature.description }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
 
-  .social-links path {
-    transition: fill 0.3s ease;
-    fill: var(--gray-400);
-  }
+    <section id="differentiation" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div class="pill primary">Why We're Different</div>
+          <h2>The best of all worlds</h2>
+          <p class="lead">
+            Visual editing power without the tradeoffs. See how Kustomizer compares to alternatives.
+          </p>
+        </div>
 
-  .social-links a:hover svg path {
-    fill: var(--gray-900);
-  }
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Criteria</th>
+                <th *ngFor="let header of comparisonHeaders" [class.highlight]="header.highlight">
+                  {{ header.label }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of comparisonRows; let i = index">
+                <td>{{ row.criteria }}</td>
+                <td
+                  *ngFor="let header of comparisonHeaders"
+                  [class.highlight]="header.highlight"
+                  [class.striped]="i % 2 === 0"
+                >
+                  <span
+                    class="value-chip"
+                    [class.yes]="cellValue(row, header.key) === 'yes'"
+                    [class.no]="cellValue(row, header.key) === 'no'"
+                    [class.partial]="cellValue(row, header.key) === 'partial'"
+                  >
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round"
+                      [innerHTML]="(cellValue(row, header.key) === 'yes' ? 'check' : cellValue(row, header.key) === 'no' ? 'x' : 'minus') | iconSvg">
+                    </svg>
+                  </span>
+                  <span class="sr-only">{{ cellLabel(cellValue(row, header.key)) }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-  @media screen and (max-width: 650px) {
-    .content {
-      flex-direction: column;
-      width: max-content;
-    }
+        <div class="callouts">
+          <div class="callout">
+            <h3>Unlike Builder.io / Shogun</h3>
+            <p>
+              No proprietary runtime injected into your frontend. No performance overhead.
+              Keep your existing stack and Core Web Vitals intact.
+            </p>
+          </div>
+          <div class="callout">
+            <h3>Unlike Headless CMS</h3>
+            <p>
+              True visual editing of your actual components, not just content fields.
+              See exactly what customers will see.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-    .divider {
-      height: 1px;
-      width: 100%;
-      background: var(--red-to-pink-to-purple-horizontal-gradient);
-      margin-block: 1.5rem;
-    }
-  }
-</style>
+    <section class="section muted">
+      <div class="container">
+        <div class="section-head">
+          <div class="pill primary">Use Cases</div>
+          <h2>What teams are doing with Kustomizer</h2>
+          <p class="lead">Real scenarios. Real velocity gains. Real autonomy for management.</p>
+        </div>
 
-<router-outlet />
+        <div class="card-grid two">
+          <article class="info-card" *ngFor="let useCase of useCases">
+            <div class="icon-pill primary">
+              <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                stroke-linecap="round" stroke-linejoin="round" [innerHTML]="useCase.icon | iconSvg"></svg>
+            </div>
+            <h3>{{ useCase.title }}</h3>
+            <p>{{ useCase.description }}</p>
+            <span class="badge alt">{{ useCase.metric }}</span>
+          </article>
+        </div>
+      </div>
+    </section>
 
+    <section class="section testimonial">
+      <div class="container">
+        <div class="quote-mark">“</div>
+        <blockquote>
+          We didn't move to headless because we knew we'd lose the visual editor.
+          <span class="gradient-text"> This changes that equation entirely.</span>
+        </blockquote>
+        <div class="quote-meta">
+          <div class="avatar">M</div>
+          <div>
+            <p class="name">Shopify Store Director</p>
+            <p class="muted">Enterprise DTC Brand (Pilot Participant)</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div class="pill primary">Security & Reliability</div>
+          <h2>Enterprise-ready from day one</h2>
+          <p class="lead">
+            Built with the security, governance, and reliability that enterprise teams require.
+          </p>
+        </div>
+
+        <div class="card-grid three">
+          <article class="info-card" *ngFor="let feature of securityFeatures">
+            <div class="icon-pill neutral">
+              <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                stroke-linecap="round" stroke-linejoin="round" [innerHTML]="feature.icon | iconSvg"></svg>
+            </div>
+            <h3>{{ feature.title }}</h3>
+            <p>{{ feature.description }}</p>
+            <p class="muted" *ngIf="feature.note">{{ feature.note }}</p>
+          </article>
+        </div>
+
+        <p class="muted center note-line">
+          We're early-stage and actively building toward SOC 2 compliance.
+          Contact us to discuss your specific security requirements.
+        </p>
+      </div>
+    </section>
+
+    <section id="faq" class="section muted">
+      <div class="container">
+        <div class="section-head">
+          <div class="pill primary">FAQ</div>
+          <h2>Frequently asked questions</h2>
+          <p class="lead">Everything you need to know about Kustomizer.</p>
+        </div>
+
+        <div class="faq-list">
+          <div class="faq-item" *ngFor="let faq of faqs; let i = index">
+            <button class="faq-header" type="button" (click)="toggleFaq(i)" [attr.aria-expanded]="faqOpen === i">
+              <span>{{ faq.question }}</span>
+              <span class="chevron" [class.open]="faqOpen === i">⌄</span>
+            </button>
+            <p class="faq-body" [class.open]="faqOpen === i">{{ faq.answer }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="demo" class="section final-cta">
+      <div class="container final-grid">
+        <div class="final-copy">
+          <div class="pill primary">Now accepting pilot partners</div>
+          <h2>Ready to bring visual editing back to headless?</h2>
+          <p class="lead">
+            Join the pilot program and give your store the autonomy they need —
+            without sacrificing the performance and flexibility of headless architecture.
+          </p>
+
+          <ul class="bullet-list">
+            <li *ngFor="let item of finalBullets">
+              <span class="icon-circle">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" [innerHTML]="'arrowRight' | iconSvg"></svg>
+              </span>
+              <span>{{ item }}</span>
+            </li>
+          </ul>
+
+          <div class="callout-box">
+            <p><strong>Early adopter benefit:</strong></p>
+            <p>Pilot partners get priority access, hands-on onboarding, and input into the roadmap.</p>
+          </div>
+        </div>
+
+        <div class="final-form" id="waitlist">
+          <h3>Book your demo</h3>
+          <p class="muted">See Kustomizer in action. We'll show you how it works with your stack.</p>
+
+          <div *ngIf="formStatus === 'done'" class="success-card">
+            <div class="icon-circle success">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" [innerHTML]="'check' | iconSvg"></svg>
+            </div>
+            <h4>You're on the list!</h4>
+            <p class="muted">We'll reach out within 24 hours to schedule your demo.</p>
+          </div>
+
+          <form *ngIf="formStatus !== 'done'" class="lead-form" (submit)="submitLead($event)">
+            <div class="field-grid">
+              <label>
+                <span>Name <span class="required">*</span></span>
+                <input name="name" required placeholder="Your name" />
+              </label>
+              <label>
+                <span>Work email <span class="required">*</span></span>
+                <input type="email" name="email" required placeholder="you@company.com" />
+              </label>
+            </div>
+
+            <label>
+              <span>Company <span class="required">*</span></span>
+              <input name="company" required placeholder="Your company name" />
+            </label>
+
+            <div class="field-grid">
+              <label>
+                <span>Platform <span class="required">*</span></span>
+                <select name="platform" required>
+                  <option value="" disabled selected>Select platform</option>
+                  <option>Shopify Plus</option>
+                  <option>Shopify (Standard)</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <label>
+                <span>Current stack <span class="required">*</span></span>
+                <select name="stack" required>
+                  <option value="" disabled selected>Select stack</option>
+                  <option>Angular SSR</option>
+                  <option>React / Next.js</option>
+                  <option>Vue / Nuxt</option>
+                  <option>Other</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              <span>Monthly GMV (optional)</span>
+              <select name="gmv">
+                <option value="" selected>Select range</option>
+                <option>Under $1M</option>
+                <option>$1M - $10M</option>
+                <option>$10M - $50M</option>
+                <option>$50M - $100M</option>
+                <option>$100M+</option>
+                <option>Prefer not to say</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Additional notes (optional)</span>
+              <textarea name="notes" rows="3" placeholder="Tell us about your current challenges or goals..."></textarea>
+            </label>
+
+            <button class="btn primary block" type="submit" [disabled]="formStatus === 'submitting'">
+              {{ formStatus === 'submitting' ? 'Submitting...' : 'Book a Demo' }}
+            </button>
+            <p class="muted center small">
+              By submitting, you agree to receive communications from Kustomizer. We respect your privacy.
+            </p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="#top">
+          <span class="brand-mark">K</span>
+          <span class="brand-name">Kustomizer</span>
+        </a>
+        <p class="muted">
+          The visual layer for headless commerce. Edit sections visually, persist to Shopify, keep your performance.
+        </p>
+        <p class="muted small">Built for Shopify Plus teams going headless.</p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a *ngFor="let link of footerLinks.product" [href]="link.href">{{ link.label }}</a>
+      </div>
+
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a *ngFor="let link of footerLinks.company" [href]="link.href">{{ link.label }}</a>
+      </div>
+
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <a *ngFor="let link of footerLinks.legal" [href]="link.href">{{ link.label }}</a>
+      </div>
+    </div>
+
+    <div class="container footer-bottom">
+      <p class="muted small">© {{ currentYear }} Kustomizer. All rights reserved.</p>
+      <div class="footer-links">
+        <a href="#">Twitter</a>
+        <a href="#">LinkedIn</a>
+        <a href="#">GitHub</a>
+      </div>
+    </div>
+  </footer>
+</div>
