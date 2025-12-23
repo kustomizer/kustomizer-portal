@@ -1,0 +1,26 @@
+<div class="container">
+  <h1>Lista de Usuarios</h1>
+  
+  <div *ngIf="loading" class="loading">Cargando usuarios...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+  
+  <div *ngIf="!loading && users.length === 0" class="empty">
+    No hay usuarios disponibles
+  </div>
+  
+  <ul *ngIf="!loading && users.length > 0">
+    <li *ngFor="let user of users">
+      {{ user.username }} - {{ user.useremail }}
+    </li>
+  </ul>
+</div>
+
+<style>
+  .container {
+    padding: 2rem;
+  }
+  
+  .error {
+    color: red;
+  }
+</style>
