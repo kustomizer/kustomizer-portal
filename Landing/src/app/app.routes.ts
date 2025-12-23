@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { LandingComponent } from './components/landing/landing.component';
 import { UserListComponent } from './components/user-list/user-list.component';
 
 export const routes: Routes = [
@@ -8,7 +9,6 @@ export const routes: Routes = [
   },
   {
     path: '',
-    redirectTo: 'users',
-    pathMatch: 'full'
+    component: LandingComponent
   }
 ];
