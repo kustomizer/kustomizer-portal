@@ -27,7 +27,6 @@ export class UserListComponent implements OnInit {
   async loadUsers() {
     try {
       this.users = await this.supabaseService.getUsers();
-      console.log('Usuarios cargados:', this.users);
       this.error = null;
     } catch (err) {
       this.error = 'Error al cargar usuarios';
