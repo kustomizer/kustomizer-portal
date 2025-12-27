@@ -6,29 +6,66 @@ import { environment } from '../../environment/environment';
     providedIn: 'root'
 })
 export class SupabaseService {
-    private supabase: SupabaseClient | null = null;
+    private _client: SupabaseClient | null = null;
+    private _initialized = false;
+    private _initializationError: Error | null = null;
 
-    constructor() {
-        const { supabaseUrl, supabaseKey } = environment;
+    get client(): SupabaseClient {
+        if (!this._client && !this._initializationError) {
+            this.initialize();
+        }
 
-        // Validar que las variables existan
-        if (!supabaseUrl || !supabaseKey) {
-            console.error('Supabase URL o Key no configuradas');
+        if (this._initializationError) {
+            throw this._initializationError;
+        }
+
+        if (!this._client) {
+            throw new Error('Supabase client failed to initialize');
+        }
+
+        return this._client;
+    }
+
+    get isInitialized(): boolean {
+        return this._initialized && this._client !== null;
+    }
+
+    private initialize(): void {
+        if (this._initialized) {
             return;
         }
 
-        this.supabase = createClient(supabaseUrl, supabaseKey);
+        try {
+            const { supabaseUrl, supabaseKey } = environment;
+
+            if (!supabaseUrl || !supabaseKey) {
+                const error = new Error('Supabase URL or Key not configured in environment');
+                this._initializationError = error;
+                console.error('[SupabaseService]', error.message);
+                throw error;
+            }
+
+            this._client = createClient(supabaseUrl, supabaseKey, {
+                auth: {
+                    persistSession: true,
+                    autoRefreshToken: true,
+                },
+            });
+
+            this._initialized = true;
+            console.log('[SupabaseService] Client initialized successfully');
+        } catch (error) {
+            this._initializationError = error instanceof Error ? error : new Error('Unknown initialization error');
+            console.error('[SupabaseService] Initialization failed:', this._initializationError);
+            throw this._initializationError;
+        }
     }
 
     async getUsers() {
         try {
-            if (!this.supabase) {
-                console.warn('Supabase no inicializado');
-                return [];
-            }
-            const { data, error } = await this.supabase
+            const { data, error } = await this.client
                 .schema('public')
-                .from('users') // Reemplaza con tu tabla
+                .from('users')
                 .select('*');
 
             if (error) {
@@ -36,7 +73,7 @@ export class SupabaseService {
             }
             return data || [];
         } catch (error) {
-            console.error('Error fetching users:', error);
+            console.error('[SupabaseService] Error fetching users:', error);
             return [];
         }
     }
