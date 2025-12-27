@@ -1,14 +1,28 @@
 import { Routes } from '@angular/router';
-import { LandingComponent } from './components/landing/landing.component';
-import { UserListComponent } from './components/user-list/user-list.component';
 
 export const routes: Routes = [
   {
-    path: 'users',
-    component: UserListComponent
+    path: '',
+    loadComponent: () => import('./public/landing/landing.component').then(m => m.LandingComponent)
   },
   {
-    path: '',
-    component: LandingComponent
+    path: 'pricing',
+    loadComponent: () => import('./public/pricing/pricing.component').then(m => m.PricingComponent)
+  },
+  {
+    path: 'how-it-works',
+    loadComponent: () => import('./public/how-it-works/how-it-works.component').then(m => m.HowItWorksComponent)
+  },
+  {
+    path: 'contact',
+    loadComponent: () => import('./public/contact/contact.component').then(m => m.ContactComponent)
+  },
+  {
+    path: 'app',
+    loadChildren: () => import('./portal/portal.routes').then(m => m.portalRoutes)
+  },
+  {
+    path: 'admin',
+    loadChildren: () => import('./admin/admin.routes').then(m => m.adminRoutes)
   }
 ];

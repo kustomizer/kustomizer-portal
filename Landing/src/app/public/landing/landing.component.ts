@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, HostListener } from '@angular/core';
-import { IconPipe } from '../../icon.pipe';
+import { IconPipe } from '../../shared/icon.pipe';
 
 @Component({
   selector: 'app-landing',
