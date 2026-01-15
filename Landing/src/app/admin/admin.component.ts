@@ -1,22 +1,166 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AuthFacade } from '../core/facades/auth.facade';
 
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink, RouterLinkActive, RouterOutlet],
   template: `
-    <div class="admin-container">
-      <h1>Admin</h1>
-      <p>Backoffice coming soon...</p>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span>Kustomizer</span>
+          <small>Admin Backoffice</small>
+        </div>
+        <nav>
+          <a routerLink="/admin/orgs" routerLinkActive="active">Organizations</a>
+          <a routerLink="/admin/licenses" routerLinkActive="active">Licenses</a>
+          <a routerLink="/admin/audit" routerLinkActive="active">Audit logs</a>
+        </nav>
+      </aside>
+      <div class="content">
+        <header>
+          <div>
+            <p class="eyebrow">Backoffice</p>
+            <h2>Operations console</h2>
+          </div>
+          <div class="user" *ngIf="(user$ | async) as user">
+            <span>{{ user.name }}</span>
+            <button type="button" (click)="logout()">Log out</button>
+          </div>
+        </header>
+        <section class="page">
+          <router-outlet />
+        </section>
+      </div>
     </div>
   `,
-  styles: [`
-    .admin-container {
-      padding: 2rem;
-      text-align: center;
-    }
-  `]
-})
-export class AdminComponent { }
+  styles: [
+    `
+      .shell {
+        display: grid;
+        grid-template-columns: minmax(210px, 260px) 1fr;
+        min-height: 100vh;
+      }
 
+      .sidebar {
+        padding: 2rem 1.5rem;
+        border-right: 1px solid var(--border);
+        background: rgba(12, 16, 22, 0.7);
+      }
+
+      .brand {
+        display: grid;
+        gap: 0.35rem;
+        margin-bottom: 2rem;
+      }
+
+      .brand span {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.3rem;
+      }
+
+      .brand small {
+        color: var(--muted);
+        font-size: 0.8rem;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+      }
+
+      nav {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      nav a {
+        padding: 0.65rem 0.8rem;
+        border-radius: 12px;
+        background: transparent;
+        color: var(--muted);
+        border: 1px solid transparent;
+        transition: all 0.2s ease;
+      }
+
+      nav a.active,
+      nav a:hover {
+        color: var(--foreground);
+        border-color: var(--border);
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .content {
+        padding: 2rem 2.5rem 3rem;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 2rem;
+      }
+
+      .eyebrow {
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+        margin-bottom: 0.35rem;
+      }
+
+      .user {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 0.75rem 1rem;
+        border-radius: 16px;
+      }
+
+      .user button {
+        border: none;
+        background: transparent;
+        color: var(--primary);
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      @media (max-width: 900px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 1rem;
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+        }
+
+        nav {
+          grid-auto-flow: column;
+          overflow-x: auto;
+          padding-bottom: 0.5rem;
+        }
+      }
+    `,
+  ],
+})
+export class AdminComponent {
+  private readonly auth = inject(AuthFacade);
+  private readonly router = inject(Router);
+
+  readonly user$ = this.auth.currentUser$;
+
+  logout(): void {
+    this.auth.logout().subscribe(() => {
+      void this.router.navigate(['/login']);
+    });
+  }
+}

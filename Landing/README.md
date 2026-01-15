@@ -2,58 +2,53 @@
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.0.0.
 
-## Development server
+## Mock licensing MVP
 
-To start a local development server, run:
+The `/app` client portal and `/admin` backoffice are fully mocked. Repositories read from in-memory seed data and simulate delays + errors to prepare for Supabase or HTTP replacements without touching UI components.
+
+### Quick start
 
 ```bash
 ng serve
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+- Portal: `http://localhost:4200/app`
+- Admin: `http://localhost:4200/admin`
+- Login selector: `http://localhost:4200/login`
 
-## Code scaffolding
+### Change active user (mock auth)
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+Use the login selector page (`/login`) to choose a seeded user or create a new workspace. Sessions are stored in `localStorage` under `kustomizer.session` and expire after 8 hours.
 
-```bash
-ng generate component component-name
+### Simulate mock failures
+
+Set `localStorage.kustomizer.mock.failures` to a JSON array of failure keys (strings) to trigger errors. Example:
+
+```js
+localStorage.setItem('kustomizer.mock.failures', JSON.stringify(['stores.list', 'licenses.get']));
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+### Seed data location
 
-```bash
-ng generate --help
-```
+Edit `src/app/core/mocks/mock-data.ts` to update users, orgs, licenses, stores, domains, and audit logs.
 
-## Building
+### Folder structure
 
-To build the project run:
+- `src/app/core/models` – domain models and types
+- `src/app/core/repositories` – repository interfaces + injection tokens
+- `src/app/core/mocks` – in-memory implementations + seed data
+- `src/app/core/facades` – screen-level orchestration
+- `src/app/core/guards` – auth and admin guards
+- `src/app/core/adapters` – Supabase adapter stub
+- `src/app/portal/pages` – client portal pages
+- `src/app/admin/pages` – admin backoffice pages
+- `src/app/shared/validators` – form validators
+- `src/app/shared/utils` – load state helpers
 
-```bash
-ng build
-```
+### Supabase wiring (next iteration)
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+`src/app/core/adapters/supabase.adapter.ts` reads `environment.supabaseUrl` and `environment.supabaseKey`. To swap mocks for Supabase or HTTP:
 
-## Running unit tests
-
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+1. Create repository implementations (e.g. `SupabaseStoresRepository`) in `src/app/core/repositories`.
+2. Update `src/app/app.config.ts` to provide those classes instead of `provideMockRepositories()`.
+3. Keep components unchanged; they depend on repository interfaces only.
