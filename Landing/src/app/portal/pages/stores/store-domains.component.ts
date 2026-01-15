@@ -1,12 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { map, shareReplay, switchMap } from 'rxjs/operators';
-import { PortalStoreFacade } from '../../../core/facades/portal-store.facade';
-import { StoreDomain } from '../../../core/models';
-import { domainValidator, normalizeDomain } from '../../../shared/validators/domain.validator';
+import { finalize } from 'rxjs/operators';
+import { DomainsFacade } from '../../../core/facades/domains.facade';
+import { DomainError } from '../../../core/types/domain-error';
 
 @Component({
   selector: 'app-store-domains',
@@ -15,174 +13,271 @@ import { domainValidator, normalizeDomain } from '../../../shared/validators/dom
   template: `
     <div class="header">
       <div>
-        <h2>Allowlisted domains</h2>
-        <p>Control which domains can access your storefront experience.</p>
+        <h2>Domain Management</h2>
+        <p>Add and remove domains for this store</p>
       </div>
-      <a class="ghost" [routerLink]="['/app/stores', storeId]">Back to store</a>
+      <a [routerLink]="['/app/stores', storeId]" class="btn-secondary">← Back to Store</a>
     </div>
 
-    <div class="card" *ngIf="license$ | async as licenseState">
-      <div *ngIf="licenseState.state === 'loading'" class="state">Loading license limits...</div>
-      <div *ngIf="licenseState.state === 'error'" class="state error">{{ licenseState.error }}</div>
-      <div *ngIf="licenseState.state === 'empty'" class="state">No license data found.</div>
-      <div *ngIf="licenseState.state === 'ready'" class="limits">
-        <div>
-          <p class="label">Current tier</p>
-          <p>{{ licenseState.data?.tier | titlecase }}</p>
+    <section class="card">
+      <h3>Add Domain</h3>
+      <form [formGroup]="domainForm" (ngSubmit)="addDomain()" class="domain-form">
+        <div class="input-group">
+          <input
+            type="text"
+            formControlName="domain"
+            placeholder="example.com"
+            [disabled]="isSubmitting"
+          />
+          <button type="submit" [disabled]="domainForm.invalid || isSubmitting" class="btn-primary">
+            {{ isSubmitting ? 'Adding...' : 'Add Domain' }}
+          </button>
         </div>
-        <div>
-          <p class="label">Domains per store</p>
-          <p>{{ licenseState.data?.limits?.domainsPerStore }}</p>
+        <div
+          *ngIf="domainForm.get('domain')?.invalid && domainForm.get('domain')?.touched"
+          class="error-msg"
+        >
+          Please enter a valid domain
         </div>
-        <div>
-          <p class="label">Domains used</p>
-          <p>{{ domainCount }}</p>
-        </div>
-      </div>
-    </div>
+        <div *ngIf="errorMessage" class="error-msg">{{ errorMessage }}</div>
+        <div *ngIf="successMessage" class="success-msg">{{ successMessage }}</div>
+      </form>
+    </section>
 
-    <form class="card form" [formGroup]="domainForm" (ngSubmit)="addDomain()">
-      <div>
-        <label>Domain</label>
-        <input formControlName="domain" placeholder="shop.brand.com" />
-        <p class="helper" *ngIf="domainForm.controls.domain.errors?.['domain']">
-          Please enter a valid domain.
-        </p>
+    <section class="card">
+      <div class="card-header">
+        <h3>Domains</h3>
+        <ng-container *ngIf="vm$ | async as vm">
+          <span class="count" *ngIf="vm.state === 'ready' && vm.data">
+            {{ vm.data.domains.length }} / {{ vm.data.maxDomains }}
+          </span>
+        </ng-container>
       </div>
-      <button type="submit" [disabled]="domainForm.invalid || submitting">
-        {{ submitting ? 'Adding...' : 'Add domain' }}
-      </button>
-      <p class="helper error" *ngIf="errorMessage">{{ errorMessage }}</p>
-    </form>
 
-    <ng-container *ngIf="domainsState$ | async as domainsState">
-      <div *ngIf="domainsState.state === 'loading'" class="state">Loading domains...</div>
-      <div *ngIf="domainsState.state === 'error'" class="state error">{{ domainsState.error }}</div>
-      <div *ngIf="domainsState.state === 'empty'" class="state">No domains added yet.</div>
-      <div *ngIf="domainsState.state === 'ready'" class="card list">
-        <div class="list-item" *ngFor="let domain of domainsState.data ?? []">
-          <div>
-            <strong>{{ domain.domain }}</strong>
-            <p>Added {{ domain.createdAt | date: 'mediumDate' }}</p>
+      <ng-container *ngIf="vm$ | async as vm">
+        <div *ngIf="vm.state === 'loading'" class="state">Loading domains...</div>
+        <div *ngIf="vm.state === 'error'" class="state error">{{ vm.error }}</div>
+        <div *ngIf="vm.state === 'empty'" class="state">
+          No domains added yet. Add your first domain above.
+        </div>
+        <div *ngIf="vm.state === 'ready' && vm.data" class="domains-list">
+          <div *ngIf="vm.data.limitReached" class="warning-msg">
+            Domain limit reached. Remove a domain or upgrade your plan to add more.
           </div>
-          <button type="button" class="ghost" (click)="removeDomain(domain)">Remove</button>
+          <div class="domain-item" *ngFor="let domain of vm.data.domains">
+            <div class="domain-info">
+              <h4>{{ domain.domain }}</h4>
+              <p class="muted">Added {{ domain.createdAt | date: 'medium' }}</p>
+            </div>
+            <button
+              type="button"
+              (click)="removeDomain(domain.id, domain.domain)"
+              class="btn-danger"
+              [disabled]="isRemoving === domain.id"
+            >
+              {{ isRemoving === domain.id ? 'Removing...' : 'Remove' }}
+            </button>
+          </div>
         </div>
-      </div>
-    </ng-container>
+      </ng-container>
+    </section>
   `,
   styles: [
     `
       .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 1rem;
         margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+      }
+
+      .btn-secondary {
+        padding: 0.5rem 1rem;
+        border-radius: 10px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        color: var(--foreground);
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+
+      .btn-secondary:hover {
+        border-color: var(--primary);
+        background: rgba(var(--primary-rgb), 0.1);
       }
 
       .card {
         background: var(--card);
         border: 1px solid var(--border);
-        border-radius: 18px;
-        padding: 1.25rem;
-        margin-bottom: 1rem;
+        border-radius: 20px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
       }
 
-      .header {
+      .card h3 {
+        margin: 0 0 1rem 0;
+      }
+
+      .card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .card-header h3 {
+        margin: 0;
+      }
+
+      .count {
+        padding: 0.25rem 0.75rem;
+        border-radius: 999px;
+        background: var(--card-soft);
+        border: 1px solid var(--border);
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+
+      .domain-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .input-group {
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      input {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--foreground);
+        font-size: 1rem;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--primary);
+      }
+
+      input:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        padding: 0.75rem 1.5rem;
+        border-radius: 12px;
+        border: none;
+        background: var(--primary);
+        color: #0a0d10;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: opacity 0.2s;
+        white-space: nowrap;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        opacity: 0.9;
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .error-msg {
+        color: var(--danger);
+        font-size: 0.85rem;
+      }
+
+      .success-msg {
+        color: #10b981;
+        font-size: 0.85rem;
+      }
+
+      .warning-msg {
+        padding: 1rem;
+        border-radius: 12px;
+        background: rgba(251, 191, 36, 0.1);
+        border: 1px solid #fbbf24;
+        color: #fbbf24;
+        margin-bottom: 1rem;
       }
 
       .state {
         color: var(--muted);
+        padding: 2rem 0;
+        text-align: center;
       }
 
       .state.error {
         color: var(--danger);
       }
 
-      .limits {
-        display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      }
-
-      .label {
-        text-transform: uppercase;
-        font-size: 0.7rem;
-        color: var(--muted);
-        letter-spacing: 0.15em;
-      }
-
-      .form {
-        display: grid;
-        gap: 1rem;
-        align-items: end;
-        grid-template-columns: 1fr 160px;
-      }
-
-      input {
-        width: 100%;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        background: transparent;
-        padding: 0.6rem 0.8rem;
-        color: var(--foreground);
-      }
-
-      button {
-        border-radius: 12px;
-        border: none;
-        background: var(--primary);
-        color: #0a0d10;
-        font-weight: 600;
-        cursor: pointer;
-        padding: 0.7rem 1rem;
-      }
-
-      button.ghost {
-        background: transparent;
-        border: 1px solid var(--border);
-        color: var(--foreground);
-      }
-
-      .ghost {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.55rem 0.9rem;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        color: var(--foreground);
-      }
-
-      .helper {
-        color: var(--muted);
-        font-size: 0.8rem;
-        margin-top: 0.35rem;
-      }
-
-      .helper.error {
-        color: var(--danger);
-      }
-
-      .list {
+      .domains-list {
         display: grid;
         gap: 0.75rem;
       }
 
-      .list-item {
+      .domain-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 1rem;
-        padding: 0.6rem 0.8rem;
+        padding: 1rem;
         border-radius: 14px;
-        background: rgba(255, 255, 255, 0.04);
+        background: var(--card-soft);
+        border: 1px solid var(--border);
       }
 
-      @media (max-width: 700px) {
-        .form {
-          grid-template-columns: 1fr;
+      .domain-info h4 {
+        margin: 0 0 0.25rem 0;
+        font-size: 1rem;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin: 0;
+      }
+
+      .btn-danger {
+        padding: 0.5rem 1rem;
+        border-radius: 10px;
+        border: 1px solid #ef4444;
+        background: transparent;
+        color: #ef4444;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+      }
+
+      .btn-danger:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.1);
+      }
+
+      .btn-danger:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      @media (max-width: 640px) {
+        .input-group {
+          flex-direction: column;
+        }
+
+        .domain-item {
+          flex-direction: column;
+          align-items: stretch;
         }
       }
     `,
@@ -190,73 +285,77 @@ import { domainValidator, normalizeDomain } from '../../../shared/validators/dom
 })
 export class StoreDomainsComponent {
   private readonly route = inject(ActivatedRoute);
-  private readonly facade = inject(PortalStoreFacade);
-  private readonly formBuilder = inject(FormBuilder);
-  private readonly destroyRef = inject(DestroyRef);
+  private readonly domainsFacade = inject(DomainsFacade);
+  private readonly fb = inject(FormBuilder);
 
-  private domainsCache: StoreDomain[] = [];
-  storeId = '';
-  domainCount = 0;
+  readonly vm$ = this.domainsFacade.vm$;
+  readonly storeId = this.route.snapshot.params['storeId'];
 
-  readonly license$ = this.facade.license$;
-  readonly domainsState$ = this.route.paramMap.pipe(
-    map(params => params.get('storeId') ?? ''),
-    switchMap(storeId => {
-      this.storeId = storeId;
-      return this.facade.domains(storeId);
-    }),
-    shareReplay(1)
-  );
+  isSubmitting = false;
+  isRemoving: string | null = null;
+  errorMessage: string | null = null;
+  successMessage: string | null = null;
 
-  readonly domainForm = this.formBuilder.group({
-    domain: ['', [Validators.required, domainValidator]],
+  readonly domainForm = this.fb.nonNullable.group({
+    domain: ['', [Validators.required, Validators.pattern(/^[a-z0-9.-]+\.[a-z]{2,}$/)]],
   });
 
-  submitting = false;
-  errorMessage = '';
-
-  constructor() {
-    this.domainsState$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(state => {
-      if (state.state === 'ready' && state.data) {
-        this.domainsCache = state.data;
-        this.domainCount = state.data.length;
-      } else if (state.state === 'empty') {
-        this.domainsCache = [];
-        this.domainCount = 0;
-      }
-    });
-  }
-
   addDomain(): void {
-    if (this.domainForm.invalid || !this.storeId) {
-      return;
-    }
-    this.errorMessage = '';
-    const raw = this.domainForm.getRawValue().domain ?? '';
-    const normalized = normalizeDomain(raw);
-
-    if (this.domainsCache.some(domain => domain.domain === normalized)) {
-      this.errorMessage = 'This domain is already allowlisted.';
+    if (this.domainForm.invalid) {
       return;
     }
 
-    this.submitting = true;
-    this.facade.addDomain(this.storeId, normalized).subscribe({
-      next: () => {
-        this.domainForm.reset({ domain: '' });
-        this.submitting = false;
-      },
-      error: error => {
-        this.errorMessage = error instanceof Error ? error.message : 'Unable to add domain.';
-        this.submitting = false;
-      },
-    });
+    const domain = this.domainForm.value.domain;
+    if (!domain) {
+      return;
+    }
+
+    this.isSubmitting = true;
+    this.errorMessage = null;
+    this.successMessage = null;
+
+    this.domainsFacade
+      .addDomain(domain)
+      .pipe(finalize(() => (this.isSubmitting = false)))
+      .subscribe({
+        next: () => {
+          this.successMessage = `Domain "${domain}" added successfully`;
+          this.domainForm.reset();
+          setTimeout(() => (this.successMessage = null), 3000);
+        },
+        error: (error: DomainError) => {
+          if (error.type === 'Conflict' && error.reason === 'DOMAIN_LIMIT_REACHED') {
+            this.errorMessage = 'Domain limit reached. Remove a domain or upgrade your plan.';
+          } else if (error.type === 'Conflict') {
+            this.errorMessage = 'This domain already exists.';
+          } else if (error.type === 'Validation') {
+            this.errorMessage = error.message;
+          } else {
+            this.errorMessage = 'Failed to add domain. Please try again.';
+          }
+        },
+      });
   }
 
-  removeDomain(domain: StoreDomain): void {
-    if (!confirm(`Remove ${domain.domain} from allowlist?`)) {
+  removeDomain(domainId: string, domainName: string): void {
+    if (!confirm(`Are you sure you want to remove "${domainName}"?`)) {
       return;
     }
-    this.facade.removeDomain(domain.id).subscribe();
+
+    this.isRemoving = domainId;
+    this.errorMessage = null;
+
+    this.domainsFacade
+      .removeDomain(domainId)
+      .pipe(finalize(() => (this.isRemoving = null)))
+      .subscribe({
+        next: () => {
+          this.successMessage = `Domain "${domainName}" removed successfully`;
+          setTimeout(() => (this.successMessage = null), 3000);
+        },
+        error: () => {
+          this.errorMessage = 'Failed to remove domain. Please try again.';
+        },
+      });
   }
 }

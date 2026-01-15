@@ -1,73 +1,113 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { map, switchMap } from 'rxjs/operators';
-import { PortalStoreFacade } from '../../../core/facades/portal-store.facade';
+import { Observable, switchMap, of } from 'rxjs';
+import { map } from 'rxjs/operators';
+import { StoreContextFacade } from '../../../core/facades/store-context.facade';
+import { Store } from '../../../core/models';
 
 @Component({
   selector: 'app-store-detail',
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
-    <ng-container *ngIf="storeState$ | async as storeState">
-      <div *ngIf="storeState.state === 'loading'" class="state">Loading store...</div>
-      <div *ngIf="storeState.state === 'error'" class="state error">{{ storeState.error }}</div>
-      <div *ngIf="storeState.state === 'empty'" class="state">Store not found.</div>
+    <div class="header">
+      <div>
+        <h2>Store Details</h2>
+        <p>View and manage store information</p>
+      </div>
+      <a routerLink="/app/stores" class="btn-secondary">← Back to Stores</a>
+    </div>
 
-      <div *ngIf="storeState.state === 'ready'" class="card">
-        <div class="header">
-          <div>
-            <p class="eyebrow">Shopify store</p>
-            <h2>{{ storeState.data?.metadata?.shopName || storeState.data?.shopDomain }}</h2>
-            <p>{{ storeState.data?.shopDomain }}</p>
+    <ng-container *ngIf="store$ | async as store">
+      <div *ngIf="!store" class="state error">Store not found</div>
+      <div *ngIf="store" class="content">
+        <section class="card">
+          <h3>Store Information</h3>
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Store Name</label>
+              <p>{{ store.name }}</p>
+            </div>
+            <div class="info-item">
+              <label>Store ID</label>
+              <p>{{ store.id }}</p>
+            </div>
+            <div class="info-item">
+              <label>Created</label>
+              <p>{{ store.createdAt | date: 'medium' }}</p>
+            </div>
           </div>
+        </section>
+
+        <section class="card">
+          <h3>Store Metadata</h3>
+          <div class="metadata" *ngIf="store.metadata && hasMetadata(store.metadata); else noMetadata">
+            <div class="info-item" *ngFor="let item of getMetadataEntries(store.metadata)">
+              <label>{{ item.key }}</label>
+              <p>{{ item.value }}</p>
+            </div>
+          </div>
+          <ng-template #noMetadata>
+            <p class="muted">No metadata available</p>
+          </ng-template>
+        </section>
+
+        <section class="card">
+          <h3>Quick Actions</h3>
           <div class="actions">
-            <a class="ghost" routerLink="/app/stores">Back to stores</a>
-            <a class="cta" [routerLink]="['/app/stores', storeState.data?.id, 'domains']">
-              Manage domains
+            <a [routerLink]="['/app/stores', store.id, 'domains']" class="action-btn">
+              <span>Manage Domains</span>
+              <span class="arrow">→</span>
             </a>
+            <button type="button" (click)="setAsActive(store.id)" class="action-btn" [disabled]="isActive(store.id)">
+              <span>{{ isActive(store.id) ? 'Current Active Store' : 'Set as Active Store' }}</span>
+              <span class="arrow" *ngIf="!isActive(store.id)">→</span>
+            </button>
           </div>
-        </div>
-        <div class="details">
-          <div>
-            <p class="label">Status</p>
-            <p>{{ storeState.data?.status | titlecase }}</p>
-          </div>
-          <div>
-            <p class="label">Last sync</p>
-            <p>{{ storeState.data?.lastSyncAt | date: 'medium' }}</p>
-          </div>
-          <div>
-            <p class="label">Last error</p>
-            <p>{{ storeState.data?.lastError || 'None' }}</p>
-          </div>
-          <div>
-            <p class="label">Contact email</p>
-            <p>{{ storeState.data?.metadata?.email || '—' }}</p>
-          </div>
-          <div>
-            <p class="label">Installed</p>
-            <p>{{ storeState.data?.metadata?.installedAt | date: 'mediumDate' }}</p>
-          </div>
-          <div>
-            <p class="label">Locale</p>
-            <p>
-              {{ storeState.data?.metadata?.country || '—' }} ·
-              {{ storeState.data?.metadata?.currency || '—' }}
-            </p>
-          </div>
-        </div>
+        </section>
       </div>
     </ng-container>
   `,
   styles: [
     `
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+      }
+
+      .btn-secondary {
+        padding: 0.5rem 1rem;
+        border-radius: 10px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        color: var(--foreground);
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+
+      .btn-secondary:hover {
+        border-color: var(--primary);
+        background: rgba(var(--primary-rgb), 0.1);
+      }
+
       .state {
         color: var(--muted);
+        padding: 2rem;
+        text-align: center;
       }
 
       .state.error {
         color: var(--danger);
+      }
+
+      .content {
+        display: grid;
+        gap: 1.5rem;
       }
 
       .card {
@@ -75,73 +115,127 @@ import { PortalStoreFacade } from '../../../core/facades/portal-store.facade';
         border: 1px solid var(--border);
         border-radius: 20px;
         padding: 1.5rem;
-        box-shadow: var(--shadow-soft);
       }
 
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+      .card h3 {
+        margin: 0 0 1rem 0;
+      }
+
+      .info-grid {
+        display: grid;
         gap: 1rem;
-        flex-wrap: wrap;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       }
 
-      .eyebrow {
+      .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .info-item label {
+        font-size: 0.75rem;
         text-transform: uppercase;
-        font-size: 0.7rem;
-        letter-spacing: 0.2em;
+        letter-spacing: 0.05em;
         color: var(--muted);
-      }
-
-      .cta {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.6rem 1rem;
-        border-radius: 12px;
-        background: var(--primary);
-        color: #0a0d10;
         font-weight: 600;
       }
 
-      .ghost {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.55rem 0.9rem;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        color: var(--foreground);
+      .info-item p {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .metadata {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      }
+
+      .muted {
+        color: var(--muted);
+        font-style: italic;
       }
 
       .actions {
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-      }
-
-      .details {
         display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        margin-top: 1.5rem;
+        gap: 0.75rem;
       }
 
-      .label {
-        text-transform: uppercase;
-        font-size: 0.7rem;
-        color: var(--muted);
-        letter-spacing: 0.15em;
+      .action-btn {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-radius: 14px;
+        background: var(--card-soft);
+        border: 1px solid transparent;
+        transition: all 0.2s;
+        font-weight: 500;
+        cursor: pointer;
+        color: var(--foreground);
+        text-align: left;
+      }
+
+      .action-btn:hover:not(:disabled) {
+        border-color: var(--primary);
+        background: rgba(var(--primary-rgb), 0.1);
+      }
+
+      .action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .action-btn .arrow {
+        color: var(--primary);
+        font-size: 1.2rem;
       }
     `,
   ],
 })
 export class StoreDetailComponent {
   private readonly route = inject(ActivatedRoute);
-  private readonly facade = inject(PortalStoreFacade);
+  private readonly storeContext = inject(StoreContextFacade);
 
-  readonly storeState$ = this.route.paramMap.pipe(
-    map(params => params.get('storeId') ?? ''),
-    switchMap(storeId => this.facade.store(storeId))
+  readonly store$: Observable<Store | null> = this.route.params.pipe(
+    switchMap((params) => {
+      const storeId = params['storeId'];
+      if (!storeId) {
+        return of(null);
+      }
+      return this.storeContext.vm$.pipe(
+        map((vm) => {
+          if (vm.state === 'ready' && vm.data) {
+            return vm.data.stores.find((s) => s.id === storeId) || null;
+          }
+          return null;
+        })
+      );
+    })
   );
+
+  private activeStoreId$ = this.storeContext.activeStoreId$;
+
+  setAsActive(storeId: string): void {
+    this.storeContext.setActiveStore(storeId);
+  }
+
+  isActive(storeId: string): boolean {
+    let active = false;
+    this.activeStoreId$.subscribe((id) => (active = id === storeId)).unsubscribe();
+    return active;
+  }
+
+  hasMetadata(metadata?: Record<string, any>): boolean {
+    return metadata ? Object.keys(metadata).length > 0 : false;
+  }
+
+  getMetadataEntries(metadata?: Record<string, any>): Array<{ key: string; value: string }> {
+    if (!metadata) return [];
+    return Object.entries(metadata).map(([key, value]) => ({
+      key,
+      value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+    }));
+  }
 }

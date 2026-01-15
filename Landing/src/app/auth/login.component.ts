@@ -8,16 +8,11 @@ import { AuthFacade } from '../core/facades/auth.facade';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule],
   template: `
     <div class="login-shell">
       <div class="login-card">
-        <div class="header">
-          <p class="eyebrow">Mock access</p>
-          <h1>Choose a user</h1>
-          <p>Pick a seeded account or create a new workspace.</p>
-        </div>
-
+        <h1>Access your account</h1>
         <div class="grid" *ngIf="users$ | async as users">
           <button
             class="user-card"
@@ -34,10 +29,6 @@ import { AuthFacade } from '../core/facades/auth.facade';
               {{ user.role === 'admin' ? 'Admin' : 'Client' }}
             </span>
           </button>
-        </div>
-
-        <div class="divider">
-          <span>or</span>
         </div>
 
         <form class="register" [formGroup]="registerForm" (ngSubmit)="register()">
@@ -57,16 +48,6 @@ import { AuthFacade } from '../core/facades/auth.facade';
         <div class="error" *ngIf="errorMessage">{{ errorMessage }}</div>
       </div>
 
-      <div class="login-aside">
-        <h2>What happens next?</h2>
-        <ul>
-          <li>We spin up a new organization with a trial license.</li>
-          <li>You can explore Portal and Admin flows immediately.</li>
-          <li>Mock session lives in localStorage (expires in 8 hours).</li>
-        </ul>
-        <a routerLink="/" class="back-link">Back to landing</a>
-      </div>
-    </div>
   `,
   styles: [
     `
@@ -78,25 +59,16 @@ import { AuthFacade } from '../core/facades/auth.facade';
         align-items: start;
       }
 
-      .login-card,
-      .login-aside {
+      .login-card {
         background: var(--card);
-        border: 1px solid var(--border);
         border-radius: 24px;
-        padding: 2rem;
+        border: 1px solid var(--border);
         box-shadow: var(--shadow-soft);
-      }
-
-      .header h1 {
-        margin-bottom: 0.5rem;
-      }
-
-      .eyebrow {
-        text-transform: uppercase;
-        letter-spacing: 0.2em;
-        font-size: 0.75rem;
-        color: var(--muted);
-        margin-bottom: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        margin: auto;
+        padding: 2rem;
+        width: 50%;
       }
 
       .grid {
@@ -139,21 +111,6 @@ import { AuthFacade } from '../core/facades/auth.facade';
       .pill.admin {
         background: rgba(255, 255, 255, 0.18);
         color: var(--primary);
-      }
-
-      .divider {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        margin: 1rem 0 1.5rem;
-      }
-
-      .divider::before,
-      .divider::after {
-        content: '';
-        flex: 1;
-        height: 1px;
-        background: var(--border);
       }
 
       .divider span {
@@ -202,12 +159,6 @@ import { AuthFacade } from '../core/facades/auth.facade';
         color: var(--danger);
       }
 
-      .login-aside ul {
-        margin: 1rem 0 1.5rem;
-        padding-left: 1.25rem;
-        color: var(--muted);
-      }
-
       .back-link {
         display: inline-flex;
         align-items: center;
@@ -234,23 +185,33 @@ export class LoginComponent {
   });
 
   login(userId: string): void {
+    // Mock login - in production, use signIn(email, password)
     this.errorMessage = '';
     this.loadingUserId = userId;
 
-    this.auth
-      .login(userId)
+    // For mock purposes, get user info first
+    this.auth.listUsers()
       .pipe(
-        switchMap(() => this.auth.currentUser$.pipe(take(1))),
+        switchMap((users) => {
+          const user = users.find(u => u.id === userId);
+          if (!user) {
+            throw new Error('User not found');
+          }
+          // In production, this would be: this.auth.signIn(email, password)
+          // For mock, we'll just navigate based on role
+          const target = user.role === 'admin' ? '/admin' : '/app';
+          void this.router.navigate([target]);
+          return this.auth.currentUser$.pipe(take(1));
+        }),
         finalize(() => {
           this.loadingUserId = null;
         })
       )
       .subscribe({
-        next: user => {
-          const target = user?.role === 'admin' ? '/admin' : '/app';
-          void this.router.navigate([target]);
+        next: () => {
+          // Navigation already handled above
         },
-        error: error => {
+        error: (error: Error) => {
           this.errorMessage = error instanceof Error ? error.message : 'Unable to login.';
         },
       });
@@ -264,8 +225,11 @@ export class LoginComponent {
     this.registering = true;
     const { name, email } = this.registerForm.getRawValue();
 
+    // In production, you'd collect password too
+    const defaultPassword = 'password123'; // Mock password
+
     this.auth
-      .register(name ?? '', email ?? '')
+      .signUp(email ?? '', defaultPassword)
       .pipe(
         switchMap(() => this.auth.currentUser$.pipe(take(1))),
         finalize(() => {
@@ -276,7 +240,7 @@ export class LoginComponent {
         next: () => {
           void this.router.navigate(['/app']);
         },
-        error: error => {
+        error: (error: Error) => {
           this.errorMessage = error instanceof Error ? error.message : 'Unable to register.';
         },
       });

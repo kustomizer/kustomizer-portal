@@ -1,9 +1,13 @@
 import { Observable } from 'rxjs';
-import { License } from '../models';
+import { License, LicenseLimits } from '../models';
+import { LicenseStatus, Tier } from '../types/enums';
 
 export interface LicensesRepository {
   listLicenses(): Observable<License[]>;
-  getLicenseForOrg(orgId: string): Observable<License | null>;
+  getLicenseByStore(storeId: string): Observable<License | null>;
   updateLicense(id: string, changes: Partial<License>): Observable<License>;
-  createLicense(orgId: string, license: Omit<License, 'id' | 'orgId'>): Observable<License>;
+  createLicense(storeId: string, license: Omit<License, 'id' | 'storeId'>): Observable<License>;
+  
+  // Tier management
+  updateTier?(storeId: string, tier: Tier): Observable<License>;
 }

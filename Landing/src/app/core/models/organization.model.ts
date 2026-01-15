@@ -1,28 +1,9 @@
-export type MembershipRole = 'owner' | 'member';
+// DEPRECATED: This file is kept for backward compatibility
+// Use ./store.model.ts and ./membership.model.ts instead
 
-export interface Organization {
-  id: string;
-  name: string;
-  createdAt: string;
-}
+export type { Store as Organization } from './store.model';
+export type { Membership } from './membership.model';
+export type { Invitation } from './membership.model';
 
-export interface Membership {
-  id: string;
-  orgId: string;
-  userId: string;
-  role: MembershipRole;
-  createdAt: string;
-}
-
-export type InvitationStatus = 'pending' | 'accepted' | 'expired';
-
-export interface Invitation {
-  id: string;
-  orgId: string;
-  email: string;
-  role: MembershipRole;
-  status: InvitationStatus;
-  invitedByUserId: string;
-  createdAt: string;
-  acceptedAt?: string;
-}
+/** @deprecated Use MembershipRole from '../types/enums' instead */
+export type MembershipRoleString = 'owner' | 'admin' | 'member';

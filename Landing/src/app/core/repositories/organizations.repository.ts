@@ -1,21 +1,30 @@
-import { Observable } from 'rxjs';
-import { Invitation, Membership, MembershipRole, Organization } from '../models';
+// This file is deprecated - use StoresRepository and MembershipsRepository instead
+// Kept for backward compatibility during migration
 
+import { Observable } from 'rxjs';
+import { Invitation, Membership, Store } from '../models';
+import { MembershipRole } from '../types/enums';
+
+export type Organization = Store;
+
+/**
+ * @deprecated Use StoresRepository and MembershipsRepository instead
+ */
 export interface OrganizationsRepository {
-  listOrganizations(): Observable<Organization[]>;
-  getOrganization(id: string): Observable<Organization | null>;
-  createOrganization(name: string): Observable<Organization>;
-  updateOrganization(id: string, changes: Partial<Organization>): Observable<Organization>;
+  listOrganizations(): Observable<Store[]>;
+  getOrganization(id: string): Observable<Store | null>;
+  createOrganization(name: string): Observable<Store>;
+  updateOrganization(id: string, changes: Partial<Store>): Observable<Store>;
   deleteOrganization(id: string): Observable<void>;
 
-  listMemberships(orgId: string): Observable<Membership[]>;
+  listMemberships(storeId: string): Observable<Membership[]>;
   listMembershipsForUser(userId: string): Observable<Membership[]>;
-  addMembership(orgId: string, userId: string, role: MembershipRole): Observable<Membership>;
+  addMembership(storeId: string, userId: string, role: MembershipRole): Observable<Membership>;
   removeMembership(membershipId: string): Observable<void>;
 
-  listInvitations(orgId: string): Observable<Invitation[]>;
+  listInvitations(storeId: string): Observable<Invitation[]>;
   inviteMember(
-    orgId: string,
+    storeId: string,
     email: string,
     role: MembershipRole,
     invitedByUserId: string
