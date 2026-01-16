@@ -26,7 +26,7 @@ interface TierOption {
     <ng-container *ngIf="licenseVm$ | async as vm">
       <div *ngIf="vm.state === 'loading'" class="state">Loading license information...</div>
       <div *ngIf="vm.state === 'error'" class="state error">{{ vm.error }}</div>
-      
+
       <div *ngIf="vm.state === 'ready' && vm.data" class="current-plan">
         <div class="badge-current">Current Plan</div>
         <h3>{{ vm.data.tierLabel }}</h3>
@@ -70,14 +70,6 @@ interface TierOption {
         </div>
       </div>
     </ng-container>
-
-    <div class="notice">
-      <h4>💡 Note</h4>
-      <p>
-        This is an MVP version. Billing is not active yet. Tier changes are applied immediately for
-        testing purposes. Contact sales for production pricing and custom enterprise plans.
-      </p>
-    </div>
   `,
   styles: [
     `
@@ -248,24 +240,6 @@ interface TierOption {
       button:disabled {
         opacity: 0.6;
         cursor: not-allowed;
-      }
-
-      .notice {
-        padding: 1.5rem;
-        border-radius: 16px;
-        background: rgba(59, 130, 246, 0.1);
-        border: 1px solid #3b82f6;
-      }
-
-      .notice h4 {
-        margin: 0 0 0.5rem 0;
-        color: #3b82f6;
-      }
-
-      .notice p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.9rem;
       }
 
       .muted {

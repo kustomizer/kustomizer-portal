@@ -22,8 +22,8 @@ export class AuthFacade {
     return this.authRepository.listUsers();
   }
 
-  signUp(email: string, password: string): Observable<void> {
-    return this.authRepository.signUp(email, password);
+  signUp(email: string, password: string, name?: string): Observable<AuthSession | null> {
+    return this.authRepository.signUp(email, password, name);
   }
 
   signIn(email: string, password: string): Observable<AuthSession> {

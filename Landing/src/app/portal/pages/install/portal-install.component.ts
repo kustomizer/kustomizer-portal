@@ -106,9 +106,9 @@ if (config.customCSS) &#123;
     <div class="info-box">
       <h4>📚 Additional Resources</h4>
       <ul>
-        <li><a href="https://docs.kustomizer.dev" target="_blank">Full Documentation</a></li>
-        <li><a href="https://github.com/kustomizer/examples" target="_blank">Code Examples</a></li>
-        <li><a href="https://kustomizer.dev/support" target="_blank">Support & FAQ</a></li>
+        <li><a href="#" target="_blank">Full Documentation</a></li>
+        <li><a href="#" target="_blank">Code Examples</a></li>
+        <li><a href="#" target="_blank">Support & FAQ</a></li>
       </ul>
     </div>
   `,

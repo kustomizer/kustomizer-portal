@@ -11,11 +11,12 @@ import { mapSupabaseErrorToDomainError } from './error-mapper';
 export class SupabaseAuthRepository implements AuthRepository {
   private readonly supabaseClient = inject(SupabaseClientService);
 
-  signUp(email: string, password: string): Observable<void> {
+  signUp(email: string, password: string, name?: string): Observable<AuthSession | null> {
     return from(
       this.supabaseClient.client.auth.signUp({
         email,
         password,
+        options: name ? { data: { name } } : undefined,
       })
     ).pipe(
       map(({ data, error }) => {
@@ -25,8 +26,14 @@ export class SupabaseAuthRepository implements AuthRepository {
         if (!data.user) {
           throw mapSupabaseErrorToDomainError({ message: 'Sign up failed' });
         }
-        // Return void after successful signup
-        return undefined;
+        if (!data.session) {
+          return null;
+        }
+        return {
+          userId: data.session.user.id,
+          storeId: '',
+          expiresAt: new Date(data.session.expires_at! * 1000).toISOString(),
+        };
       }),
       catchError((error) => {
         return throwError(() => mapSupabaseErrorToDomainError(error));
@@ -113,4 +120,3 @@ export class SupabaseAuthRepository implements AuthRepository {
     return this.getCurrentUser().pipe(map((user) => (user ? [user] : [])));
   }
 }
-

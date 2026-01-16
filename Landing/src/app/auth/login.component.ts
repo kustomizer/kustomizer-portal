@@ -1,8 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
-import { finalize, switchMap, take } from 'rxjs/operators';
+import { ActivatedRoute, Router } from '@angular/router';
+import { finalize } from 'rxjs/operators';
 import { AuthFacade } from '../core/facades/auth.facade';
 
 @Component({
@@ -13,23 +13,21 @@ import { AuthFacade } from '../core/facades/auth.facade';
     <div class="login-shell">
       <div class="login-card">
         <h1>Access your account</h1>
-        <div class="grid" *ngIf="users$ | async as users">
-          <button
-            class="user-card"
-            *ngFor="let user of users"
-            type="button"
-            (click)="login(user.id)"
-            [disabled]="loadingUserId === user.id"
-          >
-            <div>
-              <h3>{{ user.name }}</h3>
-              <p>{{ user.email }}</p>
-            </div>
-            <span class="pill" [class.admin]="user.role === 'admin'">
-              {{ user.role === 'admin' ? 'Admin' : 'Client' }}
-            </span>
+        <form class="login-form" [formGroup]="loginForm" (ngSubmit)="login()">
+          <div>
+            <label>Email</label>
+            <input formControlName="email" placeholder="you@company.com" />
+          </div>
+          <div>
+            <label>Password</label>
+            <input type="password" formControlName="password" placeholder="••••••••" />
+          </div>
+          <button type="submit" [disabled]="loginForm.invalid || loggingIn">
+            {{ loggingIn ? 'Signing in...' : 'Sign in' }}
           </button>
-        </div>
+        </form>
+
+        <div class="divider"><span>or</span></div>
 
         <form class="register" [formGroup]="registerForm" (ngSubmit)="register()">
           <div>
@@ -40,11 +38,16 @@ import { AuthFacade } from '../core/facades/auth.facade';
             <label>Email</label>
             <input formControlName="email" placeholder="camila@brand.com" />
           </div>
+          <div>
+            <label>Password</label>
+            <input type="password" formControlName="password" placeholder="Minimum 8 characters" />
+          </div>
           <button type="submit" [disabled]="registerForm.invalid || registering">
             {{ registering ? 'Creating...' : 'Create workspace' }}
           </button>
         </form>
 
+        <div class="info" *ngIf="infoMessage">{{ infoMessage }}</div>
         <div class="error" *ngIf="errorMessage">{{ errorMessage }}</div>
       </div>
 
@@ -68,49 +71,8 @@ import { AuthFacade } from '../core/facades/auth.facade';
         flex-direction: column;
         margin: auto;
         padding: 2rem;
-        width: 50%;
-      }
-
-      .grid {
-        display: grid;
-        gap: 1rem;
-        margin: 1.5rem 0;
-      }
-
-      .user-card {
         width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        padding: 1rem 1.25rem;
-        border-radius: 16px;
-        background: var(--card-soft);
-        border: 1px solid transparent;
-        color: var(--foreground);
-        cursor: pointer;
-        transition: border-color 0.2s ease, transform 0.2s ease;
-      }
-
-      .user-card:hover {
-        border-color: var(--primary);
-        transform: translateY(-1px);
-      }
-
-      .user-card h3 {
-        margin-bottom: 0.25rem;
-      }
-
-      .pill {
-        padding: 0.25rem 0.75rem;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.08);
-        font-size: 0.75rem;
-      }
-
-      .pill.admin {
-        background: rgba(255, 255, 255, 0.18);
-        color: var(--primary);
+        max-width: 480px;
       }
 
       .divider span {
@@ -118,6 +80,13 @@ import { AuthFacade } from '../core/facades/auth.facade';
         font-size: 0.8rem;
       }
 
+      .divider {
+        display: flex;
+        justify-content: center;
+        margin: 1.25rem 0;
+      }
+
+      .login-form,
       .register {
         display: grid;
         gap: 0.75rem;
@@ -159,6 +128,11 @@ import { AuthFacade } from '../core/facades/auth.facade';
         color: var(--danger);
       }
 
+      .info {
+        margin-top: 1rem;
+        color: var(--muted);
+      }
+
       .back-link {
         display: inline-flex;
         align-items: center;
@@ -173,43 +147,43 @@ export class LoginComponent {
   private readonly auth = inject(AuthFacade);
   private readonly router = inject(Router);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly route = inject(ActivatedRoute);
 
-  readonly users$ = this.auth.listUsers();
-  loadingUserId: string | null = null;
+  loggingIn = false;
   registering = false;
   errorMessage = '';
+  infoMessage = '';
 
-  readonly registerForm = this.formBuilder.group({
-    name: ['', Validators.required],
+  readonly loginForm = this.formBuilder.group({
     email: ['', [Validators.required, Validators.email]],
+    password: ['', [Validators.required, Validators.minLength(8)]],
   });
 
-  login(userId: string): void {
-    // Mock login - in production, use signIn(email, password)
-    this.errorMessage = '';
-    this.loadingUserId = userId;
+  readonly registerForm = this.formBuilder.group({
+    name: ['', [Validators.required, Validators.minLength(2)]],
+    email: ['', [Validators.required, Validators.email]],
+    password: ['', [Validators.required, Validators.minLength(8)]],
+  });
 
-    // For mock purposes, get user info first
-    this.auth.listUsers()
+  login(): void {
+    if (this.loginForm.invalid) {
+      return;
+    }
+    this.errorMessage = '';
+    this.infoMessage = '';
+    this.loggingIn = true;
+    const { email, password } = this.loginForm.getRawValue();
+
+    this.auth
+      .signIn(email ?? '', password ?? '')
       .pipe(
-        switchMap((users) => {
-          const user = users.find(u => u.id === userId);
-          if (!user) {
-            throw new Error('User not found');
-          }
-          // In production, this would be: this.auth.signIn(email, password)
-          // For mock, we'll just navigate based on role
-          const target = user.role === 'admin' ? '/admin' : '/app';
-          void this.router.navigate([target]);
-          return this.auth.currentUser$.pipe(take(1));
-        }),
         finalize(() => {
-          this.loadingUserId = null;
+          this.loggingIn = false;
         })
       )
       .subscribe({
         next: () => {
-          // Navigation already handled above
+          void this.router.navigate([this.resolveRedirectTarget()]);
         },
         error: (error: Error) => {
           this.errorMessage = error instanceof Error ? error.message : 'Unable to login.';
@@ -222,27 +196,32 @@ export class LoginComponent {
       return;
     }
     this.errorMessage = '';
+    this.infoMessage = '';
     this.registering = true;
-    const { name, email } = this.registerForm.getRawValue();
-
-    // In production, you'd collect password too
-    const defaultPassword = 'password123'; // Mock password
+    const { name, email, password } = this.registerForm.getRawValue();
 
     this.auth
-      .signUp(email ?? '', defaultPassword)
+      .signUp(email ?? '', password ?? '', name ?? undefined)
       .pipe(
-        switchMap(() => this.auth.currentUser$.pipe(take(1))),
         finalize(() => {
           this.registering = false;
         })
       )
       .subscribe({
-        next: () => {
-          void this.router.navigate(['/app']);
+        next: (session) => {
+          if (session) {
+            void this.router.navigate([this.resolveRedirectTarget()]);
+            return;
+          }
+          this.infoMessage = 'Check your email to confirm your account before signing in.';
         },
         error: (error: Error) => {
           this.errorMessage = error instanceof Error ? error.message : 'Unable to register.';
         },
       });
+  }
+
+  private resolveRedirectTarget(): string {
+    return this.route.snapshot.queryParamMap.get('redirectTo') || '/app';
   }
 }

@@ -3,7 +3,7 @@ import { CanActivateFn, Router } from '@angular/router';
 import { map, take } from 'rxjs/operators';
 import { SupabaseClientService } from '../infrastructure/supabase/supabase-client.service';
 
-export const authGuard: CanActivateFn = () => {
+export const authGuard: CanActivateFn = (_route, state) => {
   const supabaseClient = inject(SupabaseClientService);
   const router = inject(Router);
 
@@ -13,7 +13,9 @@ export const authGuard: CanActivateFn = () => {
       if (session && session.userId) {
         return true;
       }
-      return router.createUrlTree(['/login']);
+      return router.createUrlTree(['/login'], {
+        queryParams: { redirectTo: state.url },
+      });
     })
   );
 };
