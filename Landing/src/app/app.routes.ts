@@ -25,11 +25,6 @@ export const routes: Routes = [
     loadComponent: () => import('./auth/login.component').then((m) => m.LoginComponent),
   },
   {
-    path: 'invite/:membershipKey',
-    loadComponent: () =>
-      import('./invite/accept-invite.component').then((m) => m.AcceptInviteComponent),
-  },
-  {
     path: 'app',
     loadChildren: () => import('./portal/portal.routes').then((m) => m.portalRoutes),
     canActivate: [authGuard],

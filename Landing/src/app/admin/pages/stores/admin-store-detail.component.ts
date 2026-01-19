@@ -4,7 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize, take } from 'rxjs/operators';
 import { AdminFacade } from '../../../core/facades/admin.facade';
-import { LicenseStatus, Tier } from '../../../core/types/enums';
+import { StoreUserRole, StoreUserStatus, Tier } from '../../../core/types/enums';
 
 @Component({
   selector: 'app-admin-store-detail',
@@ -33,8 +33,12 @@ import { LicenseStatus, Tier } from '../../../core/types/enums';
               <p>{{ detailState.data.store.name }}</p>
             </div>
             <div class="info-item">
-              <label>Store ID</label>
-              <p><code>{{ detailState.data.store.id }}</code></p>
+              <label>Domain</label>
+              <p><code>{{ detailState.data.store.domain }}</code></p>
+            </div>
+            <div class="info-item">
+              <label>Owner Email</label>
+              <p>{{ detailState.data.store.ownerEmail }}</p>
             </div>
             <div class="info-item">
               <label>Created</label>
@@ -47,23 +51,16 @@ import { LicenseStatus, Tier } from '../../../core/types/enums';
         <section class="card" *ngIf="detailState.data.license">
           <div class="card-header">
             <h3>License Management</h3>
-            <span class="badge" [class]="'badge-status-' + detailState.data.license.status">
+            <span
+              class="badge"
+              [class]="detailState.data.license?.active ? 'badge-status-active' : 'badge-status-expired'"
+            >
               {{ detailState.data.licenseStatusLabel }}
             </span>
           </div>
 
           <form [formGroup]="licenseForm" (ngSubmit)="updateLicense()" class="license-form">
             <div class="form-row">
-              <div class="form-group">
-                <label for="status">Status</label>
-                <select id="status" formControlName="status">
-                  <option [value]="LicenseStatus.Trial">Trial</option>
-                  <option [value]="LicenseStatus.Active">Active</option>
-                  <option [value]="LicenseStatus.Expired">Expired</option>
-                  <option [value]="LicenseStatus.Suspended">Suspended</option>
-                </select>
-              </div>
-
               <div class="form-group">
                 <label for="tier">Tier</label>
                 <select id="tier" formControlName="tier">
@@ -83,41 +80,6 @@ import { LicenseStatus, Tier } from '../../../core/types/enums';
               </div>
             </div>
 
-            <div class="form-row">
-              <div class="form-group">
-                <label for="stores">Max Stores</label>
-                <input
-                  id="stores"
-                  type="number"
-                  formControlName="stores"
-                  min="0"
-                  placeholder="0"
-                />
-              </div>
-
-              <div class="form-group">
-                <label for="domainsPerStore">Domains Per Store</label>
-                <input
-                  id="domainsPerStore"
-                  type="number"
-                  formControlName="domainsPerStore"
-                  min="0"
-                  placeholder="0"
-                />
-              </div>
-
-              <div class="form-group">
-                <label for="seats">Team Seats</label>
-                <input
-                  id="seats"
-                  type="number"
-                  formControlName="seats"
-                  min="0"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-
             <div *ngIf="errorMessage" class="error-msg">{{ errorMessage }}</div>
             <div *ngIf="successMessage" class="success-msg">{{ successMessage }}</div>
 
@@ -129,12 +91,12 @@ import { LicenseStatus, Tier } from '../../../core/types/enums';
 
         <!-- Team Members -->
         <section class="card">
-          <h3>Team Members ({{ detailState.data.memberships.length }})</h3>
-          <div *ngIf="detailState.data.memberships.length === 0" class="state">
+          <h3>Store Users ({{ detailState.data.storeUsers.length }})</h3>
+          <div *ngIf="detailState.data.storeUsers.length === 0" class="state">
             No team members yet
           </div>
-          <div *ngIf="detailState.data.memberships.length > 0" class="members-list">
-            <div class="member-item" *ngFor="let member of detailState.data.memberships">
+          <div *ngIf="detailState.data.storeUsers.length > 0" class="members-list">
+            <div class="member-item" *ngFor="let member of detailState.data.storeUsers">
               <div>
                 <strong>{{ member.email }}</strong>
                 <p class="muted">{{ getRoleLabel(member.role) }} • {{ getStatusLabel(member.status) }}</p>
@@ -222,24 +184,14 @@ import { LicenseStatus, Tier } from '../../../core/types/enums';
         text-transform: uppercase;
       }
 
-      .badge-status-0 {
-        background: rgba(251, 191, 36, 0.2);
-        color: #fbbf24;
-      }
-
-      .badge-status-1 {
+      .badge-status-active {
         background: rgba(16, 185, 129, 0.2);
         color: #10b981;
       }
 
-      .badge-status-2 {
+      .badge-status-expired {
         background: rgba(239, 68, 68, 0.2);
         color: #ef4444;
-      }
-
-      .badge-status-3 {
-        background: rgba(249, 115, 22, 0.2);
-        color: #f97316;
       }
 
       .info-grid {
@@ -386,20 +338,17 @@ export class AdminStoreDetailComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
 
   readonly detail$ = this.adminFacade.selectedStoreDetail$;
-  readonly LicenseStatus = LicenseStatus;
   readonly Tier = Tier;
+  readonly StoreUserRole = StoreUserRole;
+  readonly StoreUserStatus = StoreUserStatus;
 
   isUpdating = false;
   errorMessage: string | null = null;
   successMessage: string | null = null;
 
   readonly licenseForm = this.fb.nonNullable.group({
-    status: [LicenseStatus.Active, Validators.required],
     tier: [Tier.Starter, Validators.required],
     expiresAt: [''],
-    stores: [1, [Validators.required, Validators.min(0)]],
-    domainsPerStore: [5, [Validators.required, Validators.min(0)]],
-    seats: [3, [Validators.required, Validators.min(0)]],
   });
 
   ngOnInit(): void {
@@ -412,14 +361,10 @@ export class AdminStoreDetailComponent implements OnInit {
         if (state.state === 'ready' && state.data?.license) {
           const license = state.data.license;
           this.licenseForm.patchValue({
-            status: license.status,
             tier: license.tier,
             expiresAt: license.expiresAt
               ? this.formatDateTimeLocal(license.expiresAt)
               : '',
-            stores: license.limits.stores || 1,
-            domainsPerStore: license.limits.domainsPerStore || 5,
-            seats: license.limits.seats || 3,
           });
         }
       });
@@ -452,14 +397,8 @@ export class AdminStoreDetailComponent implements OnInit {
 
     this.adminFacade
       .updateLicense(licenseId, {
-        status: formValue.status!,
         tier: formValue.tier!,
-        expiresAt: formValue.expiresAt || undefined,
-        limits: {
-          stores: formValue.stores || 0,
-          domainsPerStore: formValue.domainsPerStore || 0,
-          seats: formValue.seats || 0,
-        },
+        expiresAt: formValue.expiresAt || null,
       })
       .pipe(
         take(1),
@@ -476,14 +415,18 @@ export class AdminStoreDetailComponent implements OnInit {
       });
   }
 
-  getRoleLabel(role: number): string {
-    const roles = ['Owner', 'Admin', 'Member'];
-    return roles[role] || 'Unknown';
+  getRoleLabel(role: StoreUserRole): string {
+    if (role === StoreUserRole.Owner) return 'Owner';
+    if (role === StoreUserRole.Admin) return 'Admin';
+    if (role === StoreUserRole.Reader) return 'Read-only';
+    return 'Unknown';
   }
 
-  getStatusLabel(status: number): string {
-    const statuses = ['Pending', 'Active', 'Revoked', 'Expired'];
-    return statuses[status] || 'Unknown';
+  getStatusLabel(status: StoreUserStatus): string {
+    if (status === StoreUserStatus.Active) return 'Active';
+    if (status === StoreUserStatus.Pending) return 'Pending';
+    if (status === StoreUserStatus.Removed) return 'Removed';
+    return 'Unknown';
   }
 
   private formatDateTimeLocal(isoString: string): string {
@@ -496,4 +439,3 @@ export class AdminStoreDetailComponent implements OnInit {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 }
-

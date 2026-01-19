@@ -4,6 +4,50 @@
 
 This document explains the technical implementation of the Kustomizer SaaS License Portal, focusing on Angular best practices, architectural patterns, and design decisions based on official Angular documentation and community standards.
 
+## Domain-Centric Data Model (v2)
+
+The system now uses a **domain-centric schema** where the store domain is the primary key and the portal is owner-only.
+
+### Tables
+
+```
+stores (
+  domain text primary key,
+  name text,
+  owner_id text -- user email
+)
+
+users (
+  email text primary key,
+  name text,
+  lastname text,
+  license_id uuid null
+)
+
+licenses (
+  license_id uuid primary key,
+  tier text,
+  created_at timestamptz,
+  expires_at timestamptz null
+)
+
+store_users (
+  domain text references stores(domain),
+  email text references users(email),
+  invited_by text references users(email),
+  role text,         -- owner | admin | reader
+  status text,       -- active | removed | pending
+  primary key (domain, email)
+)
+```
+
+### Access Model
+
+- **Portal / Backoffice:** Owners only (Supabase Auth + RLS).
+- **Kustomizer Editor:** Authenticates with `{ domain, email }` via Edge Function.
+- **Team Members:** Resolved through `store_users.invited_by` (owner email).
+
+---
 ---
 
 ## Table of Contents
@@ -175,9 +219,9 @@ export class StoreContextFacade {
   );
 
   // Methods to update state
-  setActiveStore(storeId: string): void {
-    this.activeStoreIdSubject.next(storeId);
-    this.persistActiveStoreId(storeId);
+  setActiveStore(storeDomain: string): void {
+    this.activeStoreIdSubject.next(storeDomain);
+    this.saveActiveStoreId(storeDomain);
   }
 
   loadStores(): void {
@@ -261,6 +305,7 @@ export class PortalDashboardComponent {
   // Type-safe form definition
   readonly onboardingForm = this.formBuilder.nonNullable.group({
     storeName: ['', Validators.required],
+    domain: ['', Validators.required],
     tier: [Tier.Starter, Validators.required],
   });
 
@@ -269,10 +314,10 @@ export class PortalDashboardComponent {
       return;  // ← Early exit if invalid
     }
 
-    const { storeName, tier } = this.onboardingForm.getRawValue();
+    const { storeName, domain, tier } = this.onboardingForm.getRawValue();
 
     this.storeContext
-      .bootstrapStore(storeName, tier)
+      .bootstrapStore(storeName, domain, tier)
       .pipe(finalize(() => this.loading = false))
       .subscribe();
   }
@@ -288,7 +333,6 @@ export class PortalDashboardComponent {
 **Files implementing this:**
 - `src/app/portal/pages/dashboard/portal-dashboard.component.ts`
 - `src/app/portal/pages/team/portal-team.component.ts`
-- `src/app/portal/pages/stores/store-domains.component.ts`
 - `src/app/admin/pages/stores/admin-store-detail.component.ts`
 
 ---
@@ -375,7 +419,7 @@ export const authGuard: CanActivateFn = (route, state) => {
  * Admin guard using server-side validation
  * 
  * IMPORTANT: Admin status is determined server-side via Edge Functions
- * checking the internal_admins table or auth claims.
+ * checking auth app_metadata claims (e.g., role=admin).
  * Do NOT rely on client-side user.role field.
  */
 export const adminGuard: CanActivateFn = () => {
@@ -417,7 +461,7 @@ export class PortalDashboardComponent {
 
   // Methods return observables (no direct mutations)
   bootstrapStore(): void {
-    this.facade.bootstrapStore(name, tier).subscribe();
+    this.facade.bootstrapStore(name, domain, tier).subscribe();
   }
 }
 ```
@@ -514,11 +558,30 @@ export class LicenseFacade {
   // Expose view model stream
   readonly vm$: Observable<Loadable<LicenseViewModel>> =
     this.storeContext.activeStoreId$.pipe(
-      switchMap(storeId =>
-        storeId
-          ? this.loadLicenseForStore(storeId)
-          : of({ state: 'empty' as const })
-      ),
+      switchMap(storeDomain => {
+        if (!storeDomain) {
+          return of<Loadable<LicenseViewModel>>({
+            state: 'empty',
+            data: this.emptyViewModel(),
+          });
+        }
+
+        return toLoadable(
+          this.licensesRepo.getLicenseByStore(storeDomain).pipe(
+            map(license => ({
+              license: license ?? null,
+              tierLabel: license ? getTierLabel(license.tier) : 'None',
+              statusLabel: license
+                ? getLicenseStatusLabel(license.active, license.expiresAt)
+                : 'No License',
+              expiresIn: license
+                ? getExpirationLabel(license.expiresAt ?? undefined)
+                : 'N/A',
+            }))
+          ),
+          vm => vm.license === null
+        );
+      }),
       shareReplay({ bufferSize: 1, refCount: true })
     );
 
@@ -526,29 +589,26 @@ export class LicenseFacade {
   updateTier(newTier: Tier): Observable<License> {
     return this.storeContext.activeStoreId$.pipe(
       take(1),
-      switchMap(storeId =>
-        this.licensesRepo.updateTier(storeId, newTier)
-      ),
-      tap(() => this.storeContext.refresh())
+      switchMap(storeDomain =>
+        this.licensesRepo.getLicenseByStore(storeDomain).pipe(
+          switchMap(license => {
+            if (!license) {
+              throw new Error('License not found');
+            }
+            return this.licensesRepo.updateTier?.(license.id, newTier)
+              ?? this.licensesRepo.updateLicense(license.id, { tier: newTier });
+          })
+        )
+      )
     );
   }
 
-  private loadLicenseForStore(storeId: string): Observable<Loadable<LicenseViewModel>> {
-    return toLoadable(
-      this.licensesRepo.getLicenseByStore(storeId).pipe(
-        map(license => this.toViewModel(license))
-      ),
-      license => !license  // ← Define empty condition
-    );
-  }
-
-  private toViewModel(license: License): LicenseViewModel {
+  private emptyViewModel(): LicenseViewModel {
     return {
-      license,
-      statusLabel: getLicenseStatusLabel(license.status),
-      tierLabel: getTierLabel(license.tier),
-      expiresIn: getExpirationLabel(license.expiresAt),
-      limits: license.limits,
+      license: null,
+      tierLabel: 'None',
+      statusLabel: 'No License',
+      expiresIn: 'N/A',
     };
   }
 }
@@ -564,8 +624,7 @@ export class LicenseFacade {
 - `AuthFacade` - Authentication and user management
 - `StoreContextFacade` - Active store and onboarding
 - `LicenseFacade` - License information and tier management
-- `DomainsFacade` - Domain CRUD and validation
-- `MembershipsFacade` - Team and invitation management
+- `StoreUsersFacade` - Team access management
 - `AdminFacade` - Admin-specific operations
 
 ---
@@ -580,10 +639,10 @@ export class LicenseFacade {
 // 1. Define interface (domain layer)
 export interface StoresRepository {
   listMyStores(): Observable<Store[]>;
-  getStore(id: string): Observable<Store | null>;
-  createStore(store: Omit<Store, 'id' | 'createdAt'>): Observable<Store>;
-  updateStore(id: string, changes: Partial<Store>): Observable<Store>;
-  deleteStore(id: string): Observable<void>;
+  getStore(domain: string): Observable<Store | null>;
+  createStore(domain: string, name: string): Observable<Store>;
+  updateStore(domain: string, changes: Partial<Store>): Observable<Store>;
+  deleteStore(domain: string): Observable<void>;
 }
 
 // 2. Create injection token
@@ -612,10 +671,11 @@ export class SupabaseStoresRepository implements StoresRepository {
 
   private mapToStore(row: any): Store {
     return {
-      id: row.id,
+      id: row.domain,
+      domain: row.domain,
       name: row.name,
+      ownerEmail: row.owner_id,
       createdAt: row.created_at,
-      metadata: row.metadata,
     };
   }
 }
@@ -650,7 +710,7 @@ export interface Loadable<T> {
   data?: T;
   error?: string;
   errorType?: DomainErrorType;  // ← For type-specific error handling
-  errorReason?: string;          // ← For soft-limit messaging (e.g., DOMAIN_LIMIT_REACHED)
+  errorReason?: string;          // ← For reason-specific messaging (e.g., DOMAIN_ALREADY_EXISTS)
 }
 
 // 2. Create helper operator (function that returns an operator)
@@ -671,7 +731,7 @@ export const toLoadable = <T>(
         state: 'error',
         error: error instanceof Error ? error.message : 'Unexpected error',
         errorType: domainError?.type,
-        errorReason: domainError?.reason,  // ← Propagate reason for soft limits
+        errorReason: domainError?.reason,  // ← Propagate reason codes
       });
     })
   );
@@ -699,11 +759,8 @@ readonly vm$: Observable<Loadable<ViewModel>> = toLoadable(
     @case ('error') {
       <div class="error">
         {{ vm.error }}
-        @if (vm.errorReason === 'DOMAIN_LIMIT_REACHED') {
-          <p class="hint">Upgrade your plan to add more domains.</p>
-        }
-        @if (vm.errorReason === 'SEAT_LIMIT_REACHED') {
-          <p class="hint">Upgrade your plan to invite more team members.</p>
+        @if (vm.errorReason === 'DOMAIN_ALREADY_EXISTS') {
+          <p class="hint">This domain is already claimed. Try another.</p>
         }
       </div>
     }
@@ -814,11 +871,11 @@ export class PortalTeamComponent {
   inviting = false;
   inviteError: string | null = null;
 
-  sendInvitation(): void {
+  inviteUser(): void {
     this.inviting = true;  // ← Component-local state
     this.inviteError = null;
 
-    this.facade.sendInvitation(email, role)
+    this.storeUsersFacade.inviteUser(email, role)
       .pipe(finalize(() => this.inviting = false))
       .subscribe({
         error: (error) => this.inviteError = error.message
@@ -832,13 +889,14 @@ export class PortalTeamComponent {
 @Injectable({ providedIn: 'root' })  // ← Singleton
 export class StoreContextFacade {
   private readonly activeStoreIdSubject = new BehaviorSubject<string | null>(null);
+  private readonly storage = inject(StorageService);
 
   // Shared across all components
   readonly activeStoreId$ = this.activeStoreIdSubject.asObservable();
 
-  setActiveStore(storeId: string): void {
-    this.activeStoreIdSubject.next(storeId);
-    localStorage.setItem('activeStoreId', storeId);  // ← Persist
+  setActiveStore(storeDomain: string): void {
+    this.activeStoreIdSubject.next(storeDomain);
+    this.storage.setItem('active_store_domain', storeDomain);  // ← Persist safely
   }
 }
 ```
@@ -941,18 +999,18 @@ export class PortalTeamComponent {
   // Type-safe, non-nullable form
   readonly inviteForm = this.formBuilder.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
-    role: [MembershipRole.Member, Validators.required],
+    role: [StoreUserRole.Admin, Validators.required],
   });
 
-  sendInvitation(): void {
+  inviteUser(): void {
     if (this.inviteForm.invalid) {
       return;  // Early exit
     }
 
     const { email, role } = this.inviteForm.getRawValue();
-    // ↑ Type-safe: { email: string; role: MembershipRole }
+    // ↑ Type-safe: { email: string; role: StoreUserRole }
 
-    this.facade.sendInvitation(email, role).subscribe();
+    this.storeUsersFacade.inviteUser(email, role).subscribe();
   }
 }
 ```
@@ -975,16 +1033,15 @@ export function isValidDomain(domain: string): boolean {
   return domainRegex.test(normalized);
 }
 
-// Use in facade
-addDomain(domain: string): Observable<Domain> {
+// Use in onboarding flow
+bootstrapStore(storeName: string, domain: string, tier: Tier): Observable<void> {
   const normalized = normalizeDomain(domain);
-  const validationError = getDomainValidationError(normalized);
 
-  if (validationError) {
-    return throwError(() => DomainError.validation(validationError));
+  if (!isValidDomain(normalized)) {
+    return throwError(() => DomainError.validation('Invalid domain format'));
   }
 
-  return this.domainsRepo.addDomain(normalized);
+  return this.storeContext.bootstrapStore(storeName, normalized, tier);
 }
 ```
 
@@ -1004,10 +1061,10 @@ export class SupabaseStoresRepository implements StoresRepository {
       this.supabaseClient.client
         .from('stores')
         .select(`
-          id,
+          domain,
           name,
-          created_at,
-          metadata
+          owner_id,
+          created_at
         `)
         .order('created_at', { ascending: false })
     ).pipe(
@@ -1063,6 +1120,32 @@ export class EdgeClientService {
 }
 ```
 
+#### Edge Function Endpoints (v2)
+
+Public / editor authentication:
+
+- `kustomizer_auth({ domain, email })`
+  - returns `{ store_user: { role, status }, license: { active, expiresAt, tier } }`
+  - used by the Kustomizer editor to validate access
+  - role is `admin` or `reader` (owner is treated as admin for editor)
+
+Owner / portal:
+
+- `bootstrap_owner_store({ store_name, domain, tier })`
+  - creates store + license + owner mapping (tier used on first store only)
+- `invite_store_user({ domain, email, role })`
+  - adds admin/reader to `store_users`
+- `remove_store_user({ domain, email })`
+  - marks user as removed
+
+Admin:
+
+- `admin_stores_list()`
+- `admin_store_get({ domain })`
+- `admin_store_update({ domain, name?, owner_id? })`
+- `admin_store_delete({ domain })`
+- `admin_license_update({ license_id, tier?, expires_at? })`
+
 ---
 
 ## Error Handling
@@ -1107,7 +1190,7 @@ export class PortalDashboardComponent {
     this.bootstrapError = null;
 
     this.storeContext
-      .bootstrapStore(storeName, tier)
+      .bootstrapStore(storeName, domain, tier)
       .pipe(
         catchError((error: DomainError) => {
           this.bootstrapError = error.message;
@@ -1279,30 +1362,20 @@ This section documents important technical fixes applied to ensure production-re
 
 ---
 
-### 1. ✅ Explicit ID Types for bigint/int8
+### 1. ✅ Explicit ID Types (domain-centric)
 
-**Problem:** With Supabase/PostgREST, `int8` (bigint) values come as strings in JSON to avoid JavaScript number precision issues. Treating them as `number` can cause silent bugs.
+**Problem:** The v2 schema uses text keys (store domain + user email) and UUIDs (license_id). Treating everything as a generic string makes domain logic error‑prone.
 
-**Solution:** Created explicit type aliases for all ID types.
+**Solution:** Explicit type aliases for domain/email/UUID identifiers.
 
 **Implementation:**
 
 ```typescript
 // src/app/core/types/ids.ts
-/**
- * Explicit ID types for bigint/int8 columns from Supabase
- *
- * IMPORTANT: With Supabase/PostgREST, int8 (bigint) values come as strings in JSON
- * to avoid JavaScript number precision issues. Always treat these as strings.
- *
- * @see https://supabase.com/docs/guides/api/rest/postgres-types#bigint-int8
- */
-
-export type StoreId = string;
+export type StoreDomain = string;
+export type UserEmail = string;
 export type LicenseId = string;
-export type MembershipId = string;
-export type DomainId = string;
-export type UserId = string;
+export type UserId = string; // Supabase auth UUID
 export type AuditLogId = string;
 ```
 
@@ -1311,17 +1384,11 @@ export type AuditLogId = string;
 ```typescript
 // src/app/core/models/store.model.ts
 export interface Store {
-  id: StoreId;  // ← Explicit type
+  id: StoreDomain;     // alias for legacy storeId usage
+  domain: StoreDomain; // primary key
   name: string;
-  createdAt: string;
-  metadata?: StoreMetadata;
-}
-
-export interface Domain {
-  id: DomainId;
-  storeId: StoreId;  // ← Foreign keys also typed
-  domain: string;
-  createdAt: string;
+  ownerEmail: UserEmail;
+  createdAt?: string;
 }
 ```
 
@@ -1468,61 +1535,60 @@ export class StoreContextFacade {
 
 ---
 
-### 4. ✅ Enum Mapping for int8 Database Values
+### 4. ✅ Enum Handling for Text Values
 
-**Problem:** Database uses `int8` (numeric) values for enums like `status` and `tier`, but TypeScript uses named enums. Need explicit mapping to prevent type mismatches.
+**Problem:** The database uses text values for enums (`tier`, `role`, `status`). We need to keep TypeScript aligned to avoid magic strings and mismatches.
 
-**Solution:** Explicit mapping in repository layer with type assertions.
+**Solution:** Use string enums that match DB values and map rows at repository boundaries.
 
 **Implementation:**
 
 ```typescript
-// 1. Define TypeScript enums (matching DB numeric values)
-export enum LicenseStatus {
-  Trial = 0,
-  Active = 1,
-  Expired = 2,
-  Suspended = 3,
+// 1. Define TypeScript enums (matching DB text values)
+export enum Tier {
+  Starter = 'starter',
+  Growth = 'growth',
+  Enterprise = 'enterprise',
 }
 
-export enum Tier {
-  Starter = 0,
-  Growth = 1,
-  Enterprise = 2,
+export enum StoreUserRole {
+  Owner = 'owner',
+  Admin = 'admin',
+  Reader = 'reader',
+}
+
+export enum StoreUserStatus {
+  Active = 'active',
+  Removed = 'removed',
+  Pending = 'pending',
 }
 
 // 2. Map database rows to domain models
 @Injectable()
 export class SupabaseLicensesRepository implements LicensesRepository {
-  // Read: DB int8 → TypeScript enum
   private mapToLicense(row: any): License {
+    const active = !row.expires_at || new Date(row.expires_at) > new Date();
     return {
-      id: row.id.toString(),
-      storeId: row.store_id.toString(),
-      status: row.status as LicenseStatus,  // ← int8 → enum (0, 1, 2, 3)
-      tier: row.tier as Tier,                // ← int8 → enum (0, 1, 2)
-      limits: row.limits || {},
-      expiresAt: row.expires_at || undefined,
+      id: row.license_id,
+      tier: row.tier as Tier,
       createdAt: row.created_at,
+      expiresAt: row.expires_at ?? undefined,
+      active,
     };
   }
 
-  // Write: TypeScript enum → DB int8
-  updateTier(storeId: string, newTier: Tier): Observable<License> {
+  updateTier(licenseId: string, newTier: Tier): Observable<License> {
     return from(
       this.supabaseClient.client
         .from('licenses')
-        .update({
-          tier: newTier,  // ← Enum value (0, 1, 2) sent as number
-          updated_at: new Date().toISOString(),
-        })
-        .eq('store_id', storeId)
+        .update({ tier: newTier })
+        .eq('license_id', licenseId)
         .select()
         .single()
     ).pipe(
       map(({ data, error }) => {
         if (error) throw error;
-        return this.mapToLicense(data);  // ← Map response back to domain
+        return this.mapToLicense(data);
       })
     );
   }
@@ -1539,14 +1605,11 @@ export class SupabaseLicensesRepository implements LicensesRepository {
 
 ```typescript
 // src/app/shared/utils/enum-labels.ts
-export function getLicenseStatusLabel(status: LicenseStatus): string {
-  switch (status) {
-    case LicenseStatus.Trial: return 'Trial';
-    case LicenseStatus.Active: return 'Active';
-    case LicenseStatus.Expired: return 'Expired';
-    case LicenseStatus.Suspended: return 'Suspended';
-    default: return 'Unknown';
-  }
+export function getLicenseStatusLabel(active: boolean, expiresAt?: string | null): string {
+  if (!active) return 'Expired';
+  if (!expiresAt) return 'Active';
+  const days = getDaysUntilExpiration(expiresAt);
+  return days !== null && days <= 14 ? 'Expiring' : 'Active';
 }
 
 export function getTierLabel(tier: Tier): string {
@@ -1619,8 +1682,8 @@ export const adminGuard: CanActivateFn = () => {
   );
 };
 
-// Edge Function validates against internal_admins table
-// or checks auth.jwt().app_metadata.claims
+// Edge Function validates against auth.jwt().app_metadata claims
+// (e.g., app_metadata.role === 'admin')
 ```
 
 **Why this matters:**
@@ -1689,9 +1752,9 @@ const isAdmin = await adminRepo.isAdmin();  // ← Explicit check via Edge Funct
 
 ---
 
-### 3. Error Reason Propagation for Soft Limits
+### 3. Error Reason Propagation for Known Conflicts
 
-**Problem:** When hitting soft limits (e.g., domain count, seat count), users need specific actionable messages, not generic errors.
+**Problem:** When a request fails with a known conflict (e.g., store domain already exists), users need a clear, actionable message.
 
 **Solution:** Propagate `DomainError.reason` all the way to the UI through the `Loadable` pattern.
 
@@ -1713,23 +1776,8 @@ export class DomainError extends Error {
   }
 }
 
-// 2. Repository throws with reason
-addDomain(storeId: string, domain: string): Observable<Domain> {
-  return this.edgeClient.callFunction<AddDomainRequest, AddDomainResponse>(
-    'add_domain',
-    { store_id: storeId, domain }
-  ).pipe(
-    catchError((error) => {
-      if (error.reason === 'DOMAIN_LIMIT_REACHED') {
-        return throwError(() => DomainError.conflict(
-          'Domain limit reached for your current plan',
-          'DOMAIN_LIMIT_REACHED'  // ← Reason code
-        ));
-      }
-      return throwError(() => error);
-    })
-  );
-}
+// 2. Edge Function returns reason (example)
+return errorResponse(409, 'Store domain already exists', 'DOMAIN_ALREADY_EXISTS');
 
 // 3. Loadable captures reason
 export const toLoadable = <T>(
@@ -1754,31 +1802,18 @@ export const toLoadable = <T>(
   <div class="error-banner">
     <p>{{ vm.error }}</p>
     
-    @if (vm.errorReason === 'DOMAIN_LIMIT_REACHED') {
-      <a routerLink="/app/tier" class="upgrade-link">
-        Upgrade to add more domains
-      </a>
-    }
-    
-    @if (vm.errorReason === 'SEAT_LIMIT_REACHED') {
-      <a routerLink="/app/tier" class="upgrade-link">
-        Upgrade to invite more team members
-      </a>
+    @if (vm.errorReason === 'DOMAIN_ALREADY_EXISTS') {
+      <p class="hint">That domain is already claimed.</p>
     }
   </div>
 }
 ```
 
 **Common Reason Codes:**
-- `DOMAIN_LIMIT_REACHED` - User at max domains for tier
-- `SEAT_LIMIT_REACHED` - User at max team members for tier
-- `STORE_LIMIT_REACHED` - User at max stores for tier
-- `DOMAIN_ALREADY_EXISTS` - Duplicate domain
-- `INVALID_DOMAIN_FORMAT` - Validation error
+- `DOMAIN_ALREADY_EXISTS` - Store domain already claimed
 
 **Benefits:**
 - ✅ Actionable error messages
-- ✅ Clear upgrade paths for soft limits
 - ✅ Better user experience
 - ✅ Machine-readable error codes for analytics
 
@@ -1821,7 +1856,7 @@ describe('LicenseFacade', () => {
     ]);
 
     mockStoreContext = jasmine.createSpyObj('StoreContextFacade', ['refresh']);
-    mockStoreContext.activeStoreId$ = of('store-1');
+    mockStoreContext.activeStoreId$ = of('store.example.com');
 
     TestBed.configureTestingModule({
       providers: [
@@ -1837,10 +1872,10 @@ describe('LicenseFacade', () => {
   it('should load license for active store', (done) => {
     const mockLicense: License = {
       id: 'license-1',
-      storeId: 'store-1',
-      status: LicenseStatus.Active,
       tier: Tier.Growth,
-      limits: { stores: 3, domainsPerStore: 10, seats: 12 },
+      createdAt: '2024-10-01T09:10:00.000Z',
+      expiresAt: '2025-10-01T09:10:00.000Z',
+      active: true,
     };
 
     mockLicensesRepo.getLicenseByStore.and.returnValue(of(mockLicense));
@@ -1913,8 +1948,9 @@ describe('User Onboarding', () => {
     cy.get('button[type="submit"]').click();
 
     cy.get('.onboarding-card').should('be.visible');
-    cy.get('input[placeholder="Your Store Name"]').type('My First Store');
-    cy.get('select').select('Starter');
+    cy.get('input[placeholder="My Awesome Store"]').type('My First Store');
+    cy.get('input[placeholder="store.example.com"]').type('my-store.example.com');
+    cy.get('input[type="radio"][value="starter"]').check({ force: true });
     cy.get('button[type="submit"]').click();
 
     cy.url().should('include', '/app/dashboard');
@@ -1935,8 +1971,8 @@ describe('User Onboarding', () => {
 
 **Priority 2: User-Facing Features**
 - ✅ Onboarding flow
-- ✅ Domain management
-- ✅ Team invitations
+- ✅ Store onboarding
+- ✅ Team member management
 - ✅ Tier changes
 
 **Priority 3: Edge Cases**
@@ -2038,7 +2074,7 @@ export class MyComponent {
 **Production Hardening:**
 - ✅ **SSR-Safe Storage** - isPlatformBrowser checks via StorageService
 - ✅ **Memory Leak Prevention** - shareReplay with refCount: true
-- ✅ **Error Reason Propagation** - DomainError.reason for soft limit messaging
+- ✅ **Error Reason Propagation** - DomainError.reason for conflict messaging
 - ✅ **Server-Side Auth** - Admin checks via Edge Functions, not client-side role
 - ✅ **Domain Error Handling** - Type-safe errors with Loadable pattern
 
@@ -2069,8 +2105,7 @@ This documentation reflects the **actual implementation** in the codebase. Key a
 2. **EdgeClientService** uses native `supabase.functions.invoke()` with `body` directly (no `JSON.stringify`)
 3. **toLoadable** is defined as a function that wraps observables, not as a pipeable operator
 4. **Enum Mapping** happens explicitly in repository layers (`mapToLicense`, `mapToStore`, etc.)
-5. **Error Reason** is propagated through `Loadable.errorReason` for soft limit messaging
+5. **Error Reason** is propagated through `Loadable.errorReason` for reason-specific messaging
 6. **ID Types** use explicit type aliases (`StoreId`, `LicenseId`) to prevent number casting issues
 
 These patterns ensure the codebase can be understood and extended by other developers or AI assistants without introducing integration errors or security issues.
-

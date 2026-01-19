@@ -17,11 +17,6 @@ export interface LicenseViewModel {
   tierLabel: string;
   statusLabel: string;
   expiresIn: string;
-  limits: {
-    stores: number;
-    domainsPerStore: number;
-    seats: number;
-  };
 }
 
 @Injectable({ providedIn: 'root' })
@@ -48,13 +43,8 @@ export class LicenseFacade {
             return {
               license,
               tierLabel: getTierLabel(license.tier),
-              statusLabel: getLicenseStatusLabel(license.status),
-              expiresIn: getExpirationLabel(license.expiresAt),
-              limits: {
-                stores: license.limits.stores || 0,
-                domainsPerStore: license.limits.domainsPerStore || 0,
-                seats: license.limits.seats || 0,
-              },
+              statusLabel: getLicenseStatusLabel(license.active, license.expiresAt),
+              expiresIn: getExpirationLabel(license.expiresAt ?? undefined),
             };
           })
         ),
@@ -73,7 +63,14 @@ export class LicenseFacade {
 
         // If updateTier method exists on repo, use it
         if (this.licensesRepo.updateTier) {
-          return this.licensesRepo.updateTier(storeId, newTier);
+          return this.licensesRepo.getLicenseByStore(storeId).pipe(
+            switchMap((license) => {
+              if (!license) {
+                throw new Error('License not found');
+              }
+              return this.licensesRepo.updateTier!(license.id, newTier);
+            })
+          );
         }
 
         // Otherwise, fetch license and update via updateLicense
@@ -95,12 +92,6 @@ export class LicenseFacade {
       tierLabel: 'None',
       statusLabel: 'No License',
       expiresIn: 'N/A',
-      limits: {
-        stores: 0,
-        domainsPerStore: 0,
-        seats: 0,
-      },
     };
   }
 }
-

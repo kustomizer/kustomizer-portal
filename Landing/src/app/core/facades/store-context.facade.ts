@@ -15,7 +15,7 @@ export interface StoreContextViewModel {
   error?: string;
 }
 
-const ACTIVE_STORE_KEY = 'active_store_id';
+const ACTIVE_STORE_KEY = 'active_store_domain';
 
 @Injectable({ providedIn: 'root' })
 export class StoreContextFacade {
@@ -84,11 +84,11 @@ export class StoreContextFacade {
     this.refreshTrigger$.next();
   }
 
-  bootstrapStore(storeName: string, tier: Tier): Observable<void> {
-    return this.bootstrapRepo.bootstrapNewUser(storeName, tier).pipe(
+  bootstrapStore(storeName: string, domain: string, tier: Tier): Observable<void> {
+    return this.bootstrapRepo.bootstrapOwnerStore(storeName, domain, tier).pipe(
       tap((response) => {
         // Set the newly created store as active
-        this.setActiveStore(response.storeId);
+        this.setActiveStore(response.storeDomain);
         // Refresh stores list
         this.refreshTrigger$.next();
       }),
@@ -122,4 +122,3 @@ export class StoreContextFacade {
     this.storage.setItem(ACTIVE_STORE_KEY, storeId);
   }
 }
-

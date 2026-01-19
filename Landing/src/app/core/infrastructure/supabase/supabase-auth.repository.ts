@@ -31,7 +31,7 @@ export class SupabaseAuthRepository implements AuthRepository {
         }
         return {
           userId: data.session.user.id,
-          storeId: '',
+          storeDomain: '',
           expiresAt: new Date(data.session.expires_at! * 1000).toISOString(),
         };
       }),
@@ -57,7 +57,7 @@ export class SupabaseAuthRepository implements AuthRepository {
         }
         return {
           userId: data.session.user.id,
-          storeId: '', // Will be set by StoreContextFacade
+          storeDomain: '', // Will be set by StoreContextFacade
           expiresAt: new Date(data.session.expires_at! * 1000).toISOString(),
         };
       }),

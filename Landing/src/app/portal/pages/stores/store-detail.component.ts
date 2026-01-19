@@ -30,8 +30,8 @@ import { Store } from '../../../core/models';
               <p>{{ store.name }}</p>
             </div>
             <div class="info-item">
-              <label>Store ID</label>
-              <p>{{ store.id }}</p>
+              <label>Domain</label>
+              <p>{{ store.domain }}</p>
             </div>
             <div class="info-item">
               <label>Created</label>
@@ -41,25 +41,8 @@ import { Store } from '../../../core/models';
         </section>
 
         <section class="card">
-          <h3>Store Metadata</h3>
-          <div class="metadata" *ngIf="store.metadata && hasMetadata(store.metadata); else noMetadata">
-            <div class="info-item" *ngFor="let item of getMetadataEntries(store.metadata)">
-              <label>{{ item.key }}</label>
-              <p>{{ item.value }}</p>
-            </div>
-          </div>
-          <ng-template #noMetadata>
-            <p class="muted">No metadata available</p>
-          </ng-template>
-        </section>
-
-        <section class="card">
           <h3>Quick Actions</h3>
           <div class="actions">
-            <a [routerLink]="['/app/stores', store.id, 'domains']" class="action-btn">
-              <span>Manage Domains</span>
-              <span class="arrow">→</span>
-            </a>
             <button type="button" (click)="setAsActive(store.id)" class="action-btn" [disabled]="isActive(store.id)">
               <span>{{ isActive(store.id) ? 'Current Active Store' : 'Set as Active Store' }}</span>
               <span class="arrow" *ngIf="!isActive(store.id)">→</span>
@@ -146,17 +129,6 @@ import { Store } from '../../../core/models';
         font-size: 1rem;
       }
 
-      .metadata {
-        display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      }
-
-      .muted {
-        color: var(--muted);
-        font-style: italic;
-      }
-
       .actions {
         display: grid;
         gap: 0.75rem;
@@ -227,15 +199,4 @@ export class StoreDetailComponent {
     return active;
   }
 
-  hasMetadata(metadata?: Record<string, any>): boolean {
-    return metadata ? Object.keys(metadata).length > 0 : false;
-  }
-
-  getMetadataEntries(metadata?: Record<string, any>): Array<{ key: string; value: string }> {
-    if (!metadata) return [];
-    return Object.entries(metadata).map(([key, value]) => ({
-      key,
-      value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-    }));
-  }
 }

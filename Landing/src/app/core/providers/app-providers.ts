@@ -2,10 +2,9 @@ import { Provider } from '@angular/core';
 import {
   AUDIT_LOGS_REPOSITORY,
   AUTH_REPOSITORY,
-  DOMAINS_REPOSITORY,
   LICENSES_REPOSITORY,
   STORES_REPOSITORY,
-  MEMBERSHIPS_REPOSITORY,
+  STORE_USERS_REPOSITORY,
   BOOTSTRAP_REPOSITORY,
   ADMIN_REPOSITORY,
 } from '../repositories';
@@ -21,8 +20,7 @@ export const provideMockRepositories = (): Provider[] => [
   // { provide: AUTH_REPOSITORY, useClass: InMemoryAuthRepository },
   // { provide: STORES_REPOSITORY, useClass: InMemoryStoresRepository },
   // { provide: LICENSES_REPOSITORY, useClass: InMemoryLicensesRepository },
-  // { provide: DOMAINS_REPOSITORY, useClass: InMemoryDomainsRepository },
-  // { provide: MEMBERSHIPS_REPOSITORY, useClass: InMemoryMembershipsRepository },
+  // { provide: STORE_USERS_REPOSITORY, useClass: InMemoryStoreUsersRepository },
   // { provide: BOOTSTRAP_REPOSITORY, useClass: InMemoryBootstrapRepository },
   // { provide: ADMIN_REPOSITORY, useClass: InMemoryAdminRepository },
   // { provide: AUDIT_LOGS_REPOSITORY, useClass: InMemoryAuditLogsRepository },

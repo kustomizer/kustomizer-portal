@@ -1,9 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, from, throwError } from 'rxjs';
-import { map, catchError } from 'rxjs/operators';
+import { map, catchError, switchMap } from 'rxjs/operators';
 import { LicensesRepository } from '../../repositories/licenses.repository';
 import { License } from '../../models';
-import { LicenseStatus, Tier } from '../../types/enums';
+import { Tier } from '../../types/enums';
 import { SupabaseClientService } from './supabase-client.service';
 import { mapSupabaseErrorToDomainError } from './error-mapper';
 
@@ -17,13 +17,10 @@ export class SupabaseLicensesRepository implements LicensesRepository {
         .from('licenses')
         .select(
           `
-          id,
-          store_id,
-          status,
+          license_id,
           tier,
-          limits,
-          expires_at,
-          created_at
+          created_at,
+          expires_at
         `
         )
         .order('created_at', { ascending: false })
@@ -40,27 +37,47 @@ export class SupabaseLicensesRepository implements LicensesRepository {
     );
   }
 
-  getLicenseByStore(storeId: string): Observable<License | null> {
+  getLicenseByStore(domain: string): Observable<License | null> {
     return from(
       this.supabaseClient.client
-        .from('licenses')
-        .select(
-          `
-          id,
-          store_id,
-          status,
-          tier,
-          limits,
-          expires_at,
-          created_at
-        `
-        )
-        .eq('store_id', storeId)
+        .from('stores')
+        .select('domain, owner_id')
+        .eq('domain', domain)
         .single()
     ).pipe(
+      switchMap(({ data: store, error: storeError }) => {
+        if (storeError) {
+          if (storeError.code === 'PGRST116') {
+            return from(Promise.resolve({ data: null, error: null }));
+          }
+          throw mapSupabaseErrorToDomainError(storeError);
+        }
+        if (!store?.owner_id) {
+          return from(Promise.resolve({ data: null, error: null }));
+        }
+        return from(
+          this.supabaseClient.client
+            .from('users')
+            .select('license_id')
+            .eq('email', store.owner_id)
+            .single()
+        ).pipe(
+          switchMap(({ data: userRow, error: userError }) => {
+            if (userError || !userRow?.license_id) {
+              return from(Promise.resolve({ data: null, error: null }));
+            }
+            return from(
+              this.supabaseClient.client
+                .from('licenses')
+                .select('license_id, tier, created_at, expires_at')
+                .eq('license_id', userRow.license_id)
+                .single()
+            );
+          })
+        );
+      }),
       map(({ data, error }) => {
         if (error) {
-          // 404 is acceptable
           if (error.code === 'PGRST116') {
             return null;
           }
@@ -68,24 +85,20 @@ export class SupabaseLicensesRepository implements LicensesRepository {
         }
         return data ? this.mapToLicense(data) : null;
       }),
-      catchError((error) => {
-        return throwError(() => mapSupabaseErrorToDomainError(error));
-      })
+      catchError((error) => throwError(() => mapSupabaseErrorToDomainError(error)))
     );
   }
 
   updateLicense(id: string, changes: Partial<License>): Observable<License> {
     const updateData: any = {};
-    if (changes.status !== undefined) updateData.status = changes.status;
     if (changes.tier !== undefined) updateData.tier = changes.tier;
-    if (changes.limits !== undefined) updateData.limits = changes.limits;
     if (changes.expiresAt !== undefined) updateData.expires_at = changes.expiresAt;
 
     return from(
       this.supabaseClient.client
         .from('licenses')
         .update(updateData)
-        .eq('id', id)
+        .eq('license_id', id)
         .select()
         .single()
     ).pipe(
@@ -101,38 +114,12 @@ export class SupabaseLicensesRepository implements LicensesRepository {
     );
   }
 
-  createLicense(storeId: string, license: Omit<License, 'id' | 'storeId'>): Observable<License> {
-    return from(
-      this.supabaseClient.client
-        .from('licenses')
-        .insert({
-          store_id: storeId,
-          status: license.status,
-          tier: license.tier,
-          limits: license.limits,
-          expires_at: license.expiresAt || null,
-        })
-        .select()
-        .single()
-    ).pipe(
-      map(({ data, error }) => {
-        if (error) {
-          throw mapSupabaseErrorToDomainError(error);
-        }
-        return this.mapToLicense(data);
-      }),
-      catchError((error) => {
-        return throwError(() => mapSupabaseErrorToDomainError(error));
-      })
-    );
-  }
-
-  updateTier(storeId: string, tier: Tier): Observable<License> {
+  updateTier(licenseId: string, tier: Tier): Observable<License> {
     return from(
       this.supabaseClient.client
         .from('licenses')
         .update({ tier })
-        .eq('store_id', storeId)
+        .eq('license_id', licenseId)
         .select()
         .single()
     ).pipe(
@@ -142,22 +129,17 @@ export class SupabaseLicensesRepository implements LicensesRepository {
         }
         return this.mapToLicense(data);
       }),
-      catchError((error) => {
-        return throwError(() => mapSupabaseErrorToDomainError(error));
-      })
+      catchError((error) => throwError(() => mapSupabaseErrorToDomainError(error)))
     );
   }
 
   private mapToLicense(row: any): License {
     return {
-      id: row.id.toString(),
-      storeId: row.store_id.toString(),
-      status: row.status as LicenseStatus,
+      id: row.license_id,
       tier: row.tier as Tier,
-      limits: row.limits || {},
-      expiresAt: row.expires_at || undefined,
       createdAt: row.created_at,
+      expiresAt: row.expires_at ?? null,
+      active: !row.expires_at || new Date(row.expires_at) > new Date(),
     };
   }
 }
-

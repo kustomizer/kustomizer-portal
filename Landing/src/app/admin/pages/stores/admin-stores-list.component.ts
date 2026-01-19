@@ -33,7 +33,7 @@ import { AdminFacade } from '../../../core/facades/admin.facade';
             <thead>
               <tr>
                 <th>Store Name</th>
-                <th>Store ID</th>
+                <th>Domain</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -199,4 +199,3 @@ export class AdminStoresListComponent implements OnInit {
     this.adminFacade.loadStores();
   }
 }
-

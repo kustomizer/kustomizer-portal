@@ -1,31 +1,22 @@
-// License Status enum (backend uses int8)
-export enum LicenseStatus {
-  Trial = 0,
-  Active = 1,
-  Expired = 2,
-  Suspended = 3,
-}
-
-// License Tier enum (backend uses int8)
+// License tier enum (domain-centric schema uses text)
 export enum Tier {
-  Starter = 0,
-  Growth = 1,
-  Enterprise = 2,
+  Starter = 'starter',
+  Growth = 'growth',
+  Enterprise = 'enterprise',
 }
 
-// Membership Role enum (backend uses int8)
-export enum MembershipRole {
-  Owner = 0,
-  Admin = 1,
-  Member = 2,
+// Store user roles (domain-centric schema)
+export enum StoreUserRole {
+  Owner = 'owner',
+  Admin = 'admin',
+  Reader = 'reader',
 }
 
-// Membership Status enum (backend uses int8)
-export enum MembershipStatus {
-  Pending = 0,
-  Active = 1,
-  Revoked = 2,
-  Expired = 3,
+// Store user status (domain-centric schema)
+export enum StoreUserStatus {
+  Active = 'active',
+  Removed = 'removed',
+  Pending = 'pending',
 }
 
 // Global Role enum (for system-wide permissions)

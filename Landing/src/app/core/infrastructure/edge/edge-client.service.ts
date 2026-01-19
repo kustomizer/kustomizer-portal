@@ -65,12 +65,32 @@ export class EdgeClientService {
     // FunctionsHttpError: HTTP error from the function (status code available)
     if ('context' in error && typeof error.context === 'object' && error.context !== null && 'status' in error.context) {
       const status = error.context.status as number;
-      return mapHttpErrorToDomainError(status, { message: error.message });
+      const body = this.parseFunctionErrorBody((error.context as { body?: unknown }).body);
+      return mapHttpErrorToDomainError(status, body ?? { message: error.message });
     }
 
     // FunctionsRelayError: Error from the Edge Functions relay
     // FunctionsFetchError: Network/fetch error
     return mapHttpErrorToDomainError(500, { message: error.message || 'Edge Function error' });
   }
-}
 
+  private parseFunctionErrorBody(body: unknown): { message?: string; reason?: string } | undefined {
+    if (!body) {
+      return undefined;
+    }
+
+    if (typeof body === 'string') {
+      try {
+        return JSON.parse(body) as { message?: string; reason?: string };
+      } catch {
+        return { message: body };
+      }
+    }
+
+    if (typeof body === 'object') {
+      return body as { message?: string; reason?: string };
+    }
+
+    return undefined;
+  }
+}

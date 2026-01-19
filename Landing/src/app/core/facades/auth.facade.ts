@@ -37,9 +37,4 @@ export class AuthFacade {
   getActiveStore(): Observable<Store | null> {
     return this.activeStore$;
   }
-
-  // Deprecated - use getActiveStore() instead
-  getActiveOrganization(): Observable<Store | null> {
-    return this.getActiveStore();
-  }
 }

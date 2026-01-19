@@ -1,5 +1,5 @@
 import { GlobalRole } from '../types/enums';
-import { UserId, StoreId } from '../types/ids';
+import { UserId, StoreDomain } from '../types/ids';
 
 /**
  * Global roles for system-wide permissions
@@ -9,11 +9,11 @@ export { GlobalRole };
 /**
  * Auth session model
  *
- * IMPORTANT: userId is UUID (string), storeId is bigint but comes as string from PostgREST
+ * IMPORTANT: userId is UUID (string), storeDomain is the store primary key.
  */
 export interface AuthSession {
   userId: UserId;
-  storeId: StoreId; // Updated from orgId to storeId
+  storeDomain: StoreDomain;
   expiresAt: string;
 }
 

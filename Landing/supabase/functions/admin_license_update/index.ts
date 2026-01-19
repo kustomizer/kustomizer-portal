@@ -9,9 +9,7 @@ import {
 
 type AdminLicenseUpdateRequest = {
   license_id?: string;
-  status?: number;
-  tier?: number;
-  limits?: Record<string, unknown>;
+  tier?: string;
   expires_at?: string | null;
 };
 
@@ -46,9 +44,7 @@ Deno.serve(async (req) => {
   }
 
   const updateData: Record<string, unknown> = {};
-  if (payload.status !== undefined) updateData.status = payload.status;
   if (payload.tier !== undefined) updateData.tier = payload.tier;
-  if (payload.limits !== undefined) updateData.limits = payload.limits;
   if (payload.expires_at !== undefined) updateData.expires_at = payload.expires_at;
 
   if (Object.keys(updateData).length === 0) {
@@ -60,13 +56,20 @@ Deno.serve(async (req) => {
   const { data: license, error } = await supabaseAdmin
     .from('licenses')
     .update(updateData)
-    .eq('id', licenseId)
-    .select('id, store_id, status, tier, limits, expires_at, created_at')
+    .eq('license_id', licenseId)
+    .select('license_id, tier, expires_at, created_at')
     .single();
 
   if (error || !license) {
     return errorResponse(500, error?.message || 'Failed to update license');
   }
 
-  return jsonResponse({ license });
+  return jsonResponse({
+    license: {
+      id: license.license_id,
+      tier: license.tier,
+      expires_at: license.expires_at ?? null,
+      created_at: license.created_at,
+    },
+  });
 });

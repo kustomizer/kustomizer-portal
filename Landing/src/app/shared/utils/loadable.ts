@@ -9,7 +9,7 @@ export interface Loadable<T> {
   data?: T;
   error?: string;
   errorType?: DomainErrorType;  // For type-specific error handling
-  errorReason?: string;          // For soft-limit messaging (e.g., DOMAIN_LIMIT_REACHED)
+  errorReason?: string;          // For reason-specific messaging (e.g., DOMAIN_ALREADY_EXISTS)
 }
 
 /**
@@ -36,7 +36,7 @@ export const toLoadable = <T>(
         state: 'error',
         error: error instanceof Error ? error.message : 'Unexpected error',
         errorType: domainError?.type,
-        errorReason: domainError?.reason,  // Propagate reason for soft limits
+        errorReason: domainError?.reason,  // Propagate reason codes
       });
     })
   );

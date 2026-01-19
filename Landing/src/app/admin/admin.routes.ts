@@ -19,15 +19,6 @@ export const adminRoutes: Routes = [
         loadComponent: () =>
           import('./pages/stores/admin-store-detail.component').then(m => m.AdminStoreDetailComponent),
       },
-      // Legacy routes for backward compatibility
-      {
-        path: 'orgs',
-        redirectTo: 'stores',
-      },
-      {
-        path: 'orgs/:orgId',
-        redirectTo: 'stores/:orgId',
-      },
     ],
   },
 ];

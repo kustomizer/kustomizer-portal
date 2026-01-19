@@ -2,8 +2,9 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize, take } from 'rxjs/operators';
-import { MembershipsFacade } from '../../../core/facades/memberships.facade';
-import { MembershipRole } from '../../../core/types/enums';
+import { StoreUsersFacade } from '../../../core/facades/store-users.facade';
+import { StoreContextFacade } from '../../../core/facades/store-context.facade';
+import { StoreUserRole, StoreUserStatus } from '../../../core/types/enums';
 
 @Component({
   selector: 'app-portal-team',
@@ -13,10 +14,13 @@ import { MembershipRole } from '../../../core/types/enums';
     <div class="header">
       <h2>Team Management</h2>
       <p>Invite team members and manage access to your store</p>
+      <ng-container *ngIf="activeStore$ | async as store">
+        <p class="muted">Managing access for {{ store.name }} ({{ store.domain }})</p>
+      </ng-container>
     </div>
 
     <section class="card">
-      <h3>Invite New Member</h3>
+      <h3>Invite Teammate</h3>
       <form [formGroup]="inviteForm" (ngSubmit)="sendInvite()" class="invite-form">
         <div class="form-row">
           <div class="form-group">
@@ -39,33 +43,19 @@ import { MembershipRole } from '../../../core/types/enums';
           <div class="form-group">
             <label for="role">Role</label>
             <select id="role" formControlName="role" [disabled]="isSending">
-              <option [value]="MembershipRole.Member">Member</option>
-              <option [value]="MembershipRole.Admin">Admin</option>
-              <option [value]="MembershipRole.Owner">Owner</option>
+              <option [value]="StoreUserRole.Admin">Admin</option>
+              <option [value]="StoreUserRole.Reader">Read-only</option>
             </select>
           </div>
         </div>
 
         <button type="submit" class="btn-primary" [disabled]="inviteForm.invalid || isSending">
-          {{ isSending ? 'Sending Invitation...' : 'Send Invitation' }}
+          {{ isSending ? 'Sending...' : 'Add User' }}
         </button>
 
         <div *ngIf="errorMessage" class="error-msg">{{ errorMessage }}</div>
+        <div *ngIf="successMessage" class="success-msg">{{ successMessage }}</div>
       </form>
-
-      <div *ngIf="inviteUrl" class="invite-url-banner">
-        <div class="banner-header">
-          <h4>✉️ Invitation Sent!</h4>
-          <button type="button" (click)="clearInviteUrl()" class="btn-close">×</button>
-        </div>
-        <p>Share this link with the invitee:</p>
-        <div class="url-box">
-          <code>{{ inviteUrl }}</code>
-          <button type="button" (click)="copyInviteUrl()" class="btn-copy">
-            {{ copied ? 'Copied!' : 'Copy' }}
-          </button>
-        </div>
-      </div>
     </section>
 
     <section class="card">
@@ -77,7 +67,7 @@ import { MembershipRole } from '../../../core/types/enums';
           No team members yet. Invite someone to get started!
         </div>
         <div *ngIf="vm.state === 'ready' && vm.data" class="members-list">
-          <div class="member-item" *ngFor="let member of vm.data.members">
+          <div class="member-item" *ngFor="let member of vm.data.users">
             <div class="member-info">
               <div class="member-header">
                 <h4>{{ member.email }}</h4>
@@ -90,7 +80,14 @@ import { MembershipRole } from '../../../core/types/enums';
               </p>
             </div>
             <div class="member-actions">
-              <!-- Future: Add remove/update role actions here -->
+              <button
+                type="button"
+                class="btn-secondary"
+                (click)="removeUser(member.email)"
+                [disabled]="member.status === StoreUserStatus.Removed || member.role === StoreUserRole.Owner"
+              >
+                Remove
+              </button>
             </div>
           </div>
         </div>
@@ -100,9 +97,9 @@ import { MembershipRole } from '../../../core/types/enums';
     <div class="info-box">
       <h4>ℹ️ Team Roles</h4>
       <ul>
-        <li><strong>Owner:</strong> Full access, can manage billing and delete store</li>
-        <li><strong>Admin:</strong> Can manage domains, invite members, and view all data</li>
-        <li><strong>Member:</strong> Can view store data and manage assigned domains</li>
+        <li><strong>Owner:</strong> Full access to the portal and team management</li>
+        <li><strong>Admin:</strong> Full access to the Kustomizer editor for this store</li>
+        <li><strong>Read-only:</strong> Can view the editor but cannot publish changes</li>
       </ul>
     </div>
   `,
@@ -200,68 +197,9 @@ import { MembershipRole } from '../../../core/types/enums';
         font-size: 0.85rem;
       }
 
-      .invite-url-banner {
-        margin-top: 1.5rem;
-        padding: 1.5rem;
-        border-radius: 12px;
-        background: rgba(16, 185, 129, 0.1);
-        border: 1px solid #10b981;
-      }
-
-      .banner-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: start;
-        margin-bottom: 1rem;
-      }
-
-      .banner-header h4 {
-        margin: 0;
+      .success-msg {
         color: #10b981;
-      }
-
-      .btn-close {
-        background: none;
-        border: none;
-        font-size: 1.5rem;
-        cursor: pointer;
-        color: var(--muted);
-        padding: 0;
-        line-height: 1;
-      }
-
-      .invite-url-banner p {
-        margin: 0 0 0.75rem 0;
-        color: var(--foreground);
-      }
-
-      .url-box {
-        display: flex;
-        gap: 0.75rem;
-        align-items: center;
-        padding: 0.75rem;
-        border-radius: 8px;
-        background: var(--card);
-        border: 1px solid var(--border);
-      }
-
-      .url-box code {
-        flex: 1;
         font-size: 0.85rem;
-        word-break: break-all;
-        color: var(--foreground);
-      }
-
-      .btn-copy {
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        border: none;
-        background: var(--primary);
-        color: #0a0d10;
-        font-weight: 600;
-        font-size: 0.85rem;
-        cursor: pointer;
-        white-space: nowrap;
       }
 
       .state {
@@ -314,28 +252,19 @@ import { MembershipRole } from '../../../core/types/enums';
         text-transform: uppercase;
       }
 
-      .badge-0,
       .badge-pending {
         background: rgba(251, 191, 36, 0.2);
         color: #fbbf24;
       }
 
-      .badge-1,
       .badge-active {
         background: rgba(16, 185, 129, 0.2);
         color: #10b981;
       }
 
-      .badge-2,
-      .badge-revoked {
+      .badge-removed {
         background: rgba(239, 68, 68, 0.2);
         color: #ef4444;
-      }
-
-      .badge-3,
-      .badge-expired {
-        background: rgba(156, 163, 175, 0.2);
-        color: #9ca3af;
       }
 
       .muted {
@@ -380,20 +309,22 @@ import { MembershipRole } from '../../../core/types/enums';
   ],
 })
 export class PortalTeamComponent {
-  private readonly membershipsFacade = inject(MembershipsFacade);
+  private readonly storeContext = inject(StoreContextFacade);
+  private readonly storeUsersFacade = inject(StoreUsersFacade);
   private readonly fb = inject(FormBuilder);
 
-  readonly vm$ = this.membershipsFacade.vm$;
-  readonly MembershipRole = MembershipRole;
+  readonly vm$ = this.storeUsersFacade.vm$;
+  readonly activeStore$ = this.storeContext.getActiveStore();
+  readonly StoreUserRole = StoreUserRole;
+  readonly StoreUserStatus = StoreUserStatus;
 
   isSending = false;
   errorMessage: string | null = null;
-  inviteUrl: string | null = null;
-  copied = false;
+  successMessage: string | null = null;
 
   readonly inviteForm = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
-    role: [MembershipRole.Member, Validators.required],
+    role: [StoreUserRole.Admin, Validators.required],
   });
 
   sendInvite(): void {
@@ -408,18 +339,18 @@ export class PortalTeamComponent {
 
     this.isSending = true;
     this.errorMessage = null;
-    this.inviteUrl = null;
+    this.successMessage = null;
 
-    this.membershipsFacade
-      .sendInvitation(email, role)
+    this.storeUsersFacade
+      .inviteUser(email, role)
       .pipe(
         take(1),
         finalize(() => (this.isSending = false))
       )
       .subscribe({
-        next: (url) => {
-          this.inviteUrl = url;
-          this.inviteForm.reset({ email: '', role: MembershipRole.Member });
+        next: () => {
+          this.successMessage = 'User added to store.';
+          this.inviteForm.reset({ email: '', role: StoreUserRole.Admin });
         },
         error: (error) => {
           this.errorMessage = error.message || 'Failed to send invitation. Please try again.';
@@ -427,18 +358,18 @@ export class PortalTeamComponent {
       });
   }
 
-  copyInviteUrl(): void {
-    if (!this.inviteUrl) return;
-
-    navigator.clipboard.writeText(this.inviteUrl).then(() => {
-      this.copied = true;
-      setTimeout(() => (this.copied = false), 2000);
-    });
-  }
-
-  clearInviteUrl(): void {
-    this.inviteUrl = null;
-    this.membershipsFacade.clearInviteUrl();
+  removeUser(email: string): void {
+    this.errorMessage = null;
+    this.storeUsersFacade
+      .removeUser(email)
+      .pipe(take(1))
+      .subscribe({
+        next: () => {
+          this.successMessage = 'User removed.';
+        },
+        error: (error) => {
+          this.errorMessage = error.message || 'Failed to remove user.';
+        },
+      });
   }
 }
-

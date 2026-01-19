@@ -5,8 +5,7 @@ import { RouterLink } from '@angular/router';
 import { finalize, take } from 'rxjs/operators';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
 import { LicenseFacade } from '../../../core/facades/license.facade';
-import { DomainsFacade } from '../../../core/facades/domains.facade';
-import { Tier, LicenseStatus } from '../../../core/types/enums';
+import { Tier } from '../../../core/types/enums';
 import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
 
 @Component({
@@ -34,6 +33,20 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
             />
             <div *ngIf="onboardingForm.get('storeName')?.invalid && onboardingForm.get('storeName')?.touched" class="error-msg">
               Store name is required
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="domain">Store Domain</label>
+            <input
+              id="domain"
+              type="text"
+              formControlName="domain"
+              placeholder="store.example.com"
+              [disabled]="bootstrapping"
+            />
+            <div *ngIf="onboardingForm.get('domain')?.invalid && onboardingForm.get('domain')?.touched" class="error-msg">
+              Domain is required
             </div>
           </div>
 
@@ -79,7 +92,7 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
           <div *ngIf="licenseState.state === 'ready' && licenseState.data" class="license">
             <div>
               <p class="label">Status</p>
-              <h2 [class]="getLicenseStatusClass(licenseState.data.license?.status)">
+              <h2 [class]="getLicenseStatusClass(licenseState.data.license?.active ?? false, licenseState.data.license?.expiresAt)">
                 {{ licenseState.data.statusLabel }}
               </h2>
               <p class="sub">{{ licenseState.data.expiresIn }}</p>
@@ -88,12 +101,6 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
               <p class="label">Tier</p>
               <h2>{{ licenseState.data.tierLabel }}</h2>
               <a class="link" routerLink="/app/tier">Change tier</a>
-            </div>
-            <div>
-              <p class="label">Limits</p>
-              <p class="sub">Stores: {{ licenseState.data.limits.stores }}</p>
-              <p class="sub">Domains/store: {{ licenseState.data.limits.domainsPerStore }}</p>
-              <p class="sub">Team members: {{ licenseState.data.limits.seats }}</p>
             </div>
           </div>
         </ng-container>
@@ -114,14 +121,6 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
           </div>
         </ng-container>
         
-        <ng-container *ngIf="domainsVm$ | async as domainsState">
-          <div *ngIf="domainsState.state === 'ready' && domainsState.data" class="stats">
-            <div class="stat">
-              <p class="label">Domains</p>
-              <h3>{{ domainsState.data.domains.length }} / {{ domainsState.data.maxDomains }}</h3>
-            </div>
-          </div>
-        </ng-container>
       </section>
 
       <section class="card">
@@ -386,8 +385,8 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
         color: #ef4444;
       }
 
-      .status-suspended {
-        color: #f97316;
+      .status-warning {
+        color: #f59e0b;
       }
 
       @media (max-width: 720px) {
@@ -405,12 +404,10 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
 export class PortalDashboardComponent {
   private readonly storeContextFacade = inject(StoreContextFacade);
   private readonly licenseFacade = inject(LicenseFacade);
-  private readonly domainsFacade = inject(DomainsFacade);
   private readonly formBuilder = inject(FormBuilder);
 
   readonly storeContext$ = this.storeContextFacade.vm$;
   readonly licenseVm$ = this.licenseFacade.vm$;
-  readonly domainsVm$ = this.domainsFacade.vm$;
 
   bootstrapping = false;
   bootstrapError: string | null = null;
@@ -420,13 +417,13 @@ export class PortalDashboardComponent {
       value: Tier.Starter,
       label: 'Starter',
       price: '$29/mo',
-      features: ['1 store', '5 domains per store', '3 team members', 'Basic support'],
+      features: ['Single store', 'Core editor features', 'Email support'],
     },
     {
       value: Tier.Growth,
       label: 'Growth',
       price: '$99/mo',
-      features: ['5 stores', '20 domains per store', '10 team members', 'Priority support'],
+      features: ['Multiple stores', 'Advanced editor features', 'Priority support'],
     },
     {
       value: Tier.Enterprise,
@@ -434,15 +431,15 @@ export class PortalDashboardComponent {
       price: 'Custom',
       features: [
         'Unlimited stores',
-        'Unlimited domains',
-        'Unlimited team members',
         'Dedicated support',
+        'Custom integrations',
       ],
     },
   ];
 
   readonly onboardingForm = this.formBuilder.nonNullable.group({
     storeName: ['', [Validators.required, Validators.minLength(2)]],
+    domain: ['', [Validators.required, Validators.minLength(3)]],
     tier: [Tier.Starter, Validators.required],
   });
 
@@ -451,12 +448,12 @@ export class PortalDashboardComponent {
       return;
     }
 
-    const { storeName, tier } = this.onboardingForm.getRawValue();
+    const { storeName, domain, tier } = this.onboardingForm.getRawValue();
     this.bootstrapping = true;
     this.bootstrapError = null;
 
     this.storeContextFacade
-      .bootstrapStore(storeName, tier)
+      .bootstrapStore(storeName, domain, tier)
       .pipe(
         take(1),
         finalize(() => (this.bootstrapping = false))
@@ -464,7 +461,7 @@ export class PortalDashboardComponent {
       .subscribe({
         next: () => {
           // Success - the dashboard will automatically show after bootstrap
-          this.onboardingForm.reset({ storeName: '', tier: Tier.Starter });
+          this.onboardingForm.reset({ storeName: '', domain: '', tier: Tier.Starter });
         },
         error: (error) => {
           this.bootstrapError = error.message || 'Failed to create store. Please try again.';
@@ -472,8 +469,7 @@ export class PortalDashboardComponent {
       });
   }
 
-  getLicenseStatusClass(status?: LicenseStatus): string {
-    if (status === undefined) return '';
-    return getLicenseStatusClass(status);
+  getLicenseStatusClass(active: boolean, expiresAt?: string | null): string {
+    return getLicenseStatusClass(active, expiresAt);
   }
 }

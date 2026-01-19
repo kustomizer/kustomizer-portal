@@ -8,9 +8,9 @@ import {
 } from '../_shared/edge.ts';
 
 type AdminStoreUpdateRequest = {
-  store_id?: string;
+  domain?: string;
   name?: string;
-  metadata?: Record<string, unknown>;
+  owner_id?: string;
 };
 
 Deno.serve(async (req) => {
@@ -29,9 +29,9 @@ Deno.serve(async (req) => {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const storeId = payload.store_id;
-  if (!storeId) {
-    return errorResponse(422, 'store_id is required');
+  const domain = payload.domain;
+  if (!domain) {
+    return errorResponse(422, 'domain is required');
   }
 
   const user = await getUser(req);
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
   const updateData: Record<string, unknown> = {};
   if (payload.name !== undefined) updateData.name = payload.name;
-  if (payload.metadata !== undefined) updateData.metadata = payload.metadata;
+  if (payload.owner_id !== undefined) updateData.owner_id = payload.owner_id;
 
   if (Object.keys(updateData).length === 0) {
     return errorResponse(422, 'No fields to update');
@@ -56,8 +56,8 @@ Deno.serve(async (req) => {
   const { data: store, error } = await supabaseAdmin
     .from('stores')
     .update(updateData)
-    .eq('id', storeId)
-    .select('id, name, created_at, metadata')
+    .eq('domain', domain)
+    .select('domain, name, owner_id, created_at')
     .single();
 
   if (error || !store) {

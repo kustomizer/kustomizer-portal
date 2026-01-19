@@ -1,124 +1,100 @@
-// Bootstrap New User
-export interface BootstrapNewUserRequest {
+// Bootstrap Owner Store
+export interface BootstrapOwnerStoreRequest {
   store_name: string;
-  tier: number; // 0=Starter, 1=Growth, 2=Enterprise
+  domain: string;
+  tier: string;
 }
 
-export interface BootstrapNewUserResponse {
-  store_id: string;
+export interface BootstrapOwnerStoreResponse {
+  store_domain: string;
   license_id: string;
-  membership_id: string;
 }
 
-// Add Domain
-export interface AddDomainRequest {
-  store_id: string;
+// Invite Store User
+export interface InviteStoreUserRequest {
   domain: string;
-}
-
-export interface AddDomainResponse {
-  domain_id: string;
-}
-
-// Remove Domain
-export interface RemoveDomainRequest {
-  domain_id: string;
-}
-
-// Send Invitation
-export interface SendInvitationRequest {
-  store_id: string;
   email: string;
-  role: number; // 0=Owner, 1=Admin, 2=Member
-  expires_in_days?: number;
+  role: string;
 }
 
-export interface SendInvitationResponse {
-  invite_url: string;
-  membership_key: string;
-}
-
-// Accept Invitation
-export interface AcceptInvitationRequest {
-  membership_key: string;
-}
-
-export interface AcceptInvitationResponse {
-  membership_id: string;
-  store_id: string;
-}
-
-// Update License Tier
-export interface UpdateLicenseTierRequest {
-  store_id: string;
-  tier: number;
-}
-
-// License Check (public)
-export interface LicenseCheckRequest {
-  store_id: string;
+export interface InviteStoreUserResponse {
   domain: string;
+  email: string;
+  role: string;
+  status: string;
 }
 
-export interface LicenseCheckResponse {
-  valid: boolean;
-  tier: number;
-  status: number;
-  expires_at?: string;
+// Remove Store User
+export interface RemoveStoreUserRequest {
+  domain: string;
+  email: string;
+}
+
+// Kustomizer Auth (public)
+export interface KustomizerAuthRequest {
+  domain: string;
+  email: string;
+}
+
+export interface KustomizerAuthResponse {
+  store_user: {
+    role: string;
+    status: string;
+  };
+  license: {
+    active: boolean;
+    expiresAt?: string | null;
+    tier: string;
+  };
 }
 
 // Admin - List Stores
 export interface AdminStoresListResponse {
   stores: Array<{
-    id: string;
+    domain: string;
     name: string;
     created_at: string;
-    metadata?: Record<string, any>;
+    owner_id: string;
   }>;
 }
 
 // Admin - Get Store
 export interface AdminStoreGetRequest {
-  store_id: string;
+  domain: string;
 }
 
 export interface AdminStoreGetResponse {
   store: {
-    id: string;
+    domain: string;
     name: string;
     created_at: string;
-    metadata?: Record<string, any>;
+    owner_id: string;
   };
-  license?: {
+  license: {
     id: string;
-    status: number;
-    tier: number;
-    limits: Record<string, any>;
-    expires_at?: string;
-    created_at?: string;
-  };
-  memberships: Array<{
-    id: string;
-    user_id: string;
+    tier: string;
+    expires_at?: string | null;
+    created_at: string;
+  } | null;
+  store_users: Array<{
     email: string;
-    role: number;
-    status: number;
+    invited_by?: string | null;
+    role: string;
+    status: string;
+    created_at?: string;
   }>;
 }
 
 // Admin - Update Store
 export interface AdminStoreUpdateRequest {
-  store_id: string;
+  domain: string;
   name?: string;
-  metadata?: Record<string, any>;
+  owner_id?: string;
 }
 
 // Admin - Update License
 export interface AdminLicenseUpdateRequest {
   license_id: string;
-  status?: number;
-  tier?: number;
-  limits?: Record<string, any>;
-  expires_at?: string;
+  tier?: string;
+  expires_at?: string | null;
 }
-

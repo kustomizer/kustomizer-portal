@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map, switchMap, tap, shareReplay } from 'rxjs/operators';
-import { Store, License, LicenseLimits } from '../models';
-import { LicenseStatus, Tier } from '../types/enums';
+import { Store, License } from '../models';
+import { Tier } from '../types/enums';
 import { ADMIN_REPOSITORY } from '../repositories';
 import { AdminStoreDetail } from '../repositories/admin.repository';
 import { Loadable, toLoadable } from '../../shared/utils/loadable';
@@ -55,7 +55,7 @@ export class AdminFacade {
             map((detail) => ({
               ...detail,
               licenseStatusLabel: detail.license
-                ? getLicenseStatusLabel(detail.license.status)
+                ? getLicenseStatusLabel(detail.license.active, detail.license.expiresAt)
                 : undefined,
               licenseTierLabel: detail.license ? getTierLabel(detail.license.tier) : undefined,
             }))
@@ -76,10 +76,8 @@ export class AdminFacade {
   updateLicense(
     licenseId: string,
     changes: {
-      status?: LicenseStatus;
       tier?: Tier;
-      limits?: LicenseLimits;
-      expiresAt?: string;
+      expiresAt?: string | null;
     }
   ): Observable<License> {
     return this.adminRepo.updateLicense(licenseId, changes).pipe(
@@ -109,4 +107,3 @@ export class AdminFacade {
     return this.adminRepo.isAdmin();
   }
 }
-

@@ -8,7 +8,7 @@ import {
 } from '../_shared/edge.ts';
 
 type AdminStoreGetRequest = {
-  store_id?: string;
+  domain?: string;
 };
 
 Deno.serve(async (req) => {
@@ -27,9 +27,9 @@ Deno.serve(async (req) => {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const storeId = payload.store_id;
-  if (!storeId) {
-    return errorResponse(422, 'store_id is required');
+  const domain = payload.domain;
+  if (!domain) {
+    return errorResponse(422, 'domain is required');
   }
 
   const user = await getUser(req);
@@ -45,29 +45,46 @@ Deno.serve(async (req) => {
 
   const { data: store, error: storeError } = await supabaseAdmin
     .from('stores')
-    .select('id, name, created_at, metadata')
-    .eq('id', storeId)
+    .select('domain, name, owner_id, created_at')
+    .eq('domain', domain)
     .single();
 
   if (storeError || !store) {
     return errorResponse(404, 'Store not found');
   }
 
-  const { data: license } = await supabaseAdmin
-    .from('licenses')
-    .select('id, status, tier, limits, expires_at, created_at')
-    .eq('store_id', storeId)
+  const { data: ownerProfile } = await supabaseAdmin
+    .from('users')
+    .select('license_id')
+    .eq('email', store.owner_id)
     .maybeSingle();
 
-  const { data: memberships } = await supabaseAdmin
-    .from('memberships')
-    .select('id, user_id, email, role, status')
-    .eq('store_id', storeId)
+  const { data: license } = ownerProfile?.license_id
+    ? await supabaseAdmin
+        .from('licenses')
+        .select('license_id, tier, expires_at, created_at')
+        .eq('license_id', ownerProfile.license_id)
+        .maybeSingle()
+    : { data: null };
+
+  const { data: storeUsers } = await supabaseAdmin
+    .from('store_users')
+    .select('email, invited_by, role, status, created_at')
+    .eq('domain', domain)
     .order('created_at', { ascending: false });
+
+  const licensePayload = license
+    ? {
+        id: license.license_id,
+        tier: license.tier,
+        expires_at: license.expires_at ?? null,
+        created_at: license.created_at,
+      }
+    : null;
 
   return jsonResponse({
     store,
-    license: license ?? null,
-    memberships: memberships ?? [],
+    license: licensePayload,
+    store_users: storeUsers ?? [],
   });
 });

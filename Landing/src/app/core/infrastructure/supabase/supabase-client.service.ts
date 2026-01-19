@@ -73,9 +73,8 @@ export class SupabaseClientService {
     // The StoreContextFacade will manage the actual active store
     return {
       userId: session.user.id,
-      storeId: '', // Will be set by StoreContextFacade
+      storeDomain: '', // Will be set by StoreContextFacade
       expiresAt: new Date(session.expires_at! * 1000).toISOString(),
     };
   }
 }
-

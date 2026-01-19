@@ -7,11 +7,10 @@
  * @see https://supabase.com/docs/guides/api/rest/postgres-types#bigint-int8
  */
 
-export type StoreId = string;
+export type StoreDomain = string;
 export type LicenseId = string;
-export type MembershipId = string;
-export type DomainId = string;
 export type UserId = string;
+export type UserEmail = string;
 export type AuditLogId = string;
 
 /**
@@ -24,7 +23,6 @@ export function isValidId(value: unknown): value is string {
 /**
  * Type guard for StoreId
  */
-export function isStoreId(value: unknown): value is StoreId {
+export function isStoreId(value: unknown): value is StoreDomain {
   return isValidId(value);
 }
-

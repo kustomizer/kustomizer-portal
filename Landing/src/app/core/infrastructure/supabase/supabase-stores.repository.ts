@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, from, throwError } from 'rxjs';
-import { map, catchError } from 'rxjs/operators';
+import { map, catchError, switchMap } from 'rxjs/operators';
 import { StoresRepository } from '../../repositories/stores.repository';
 import { Store } from '../../models';
 import { SupabaseClientService } from './supabase-client.service';
@@ -16,10 +16,10 @@ export class SupabaseStoresRepository implements StoresRepository {
         .from('stores')
         .select(
           `
-          id,
+          domain,
           name,
-          created_at,
-          metadata
+          owner_id,
+          created_at
         `
         )
         .order('created_at', { ascending: false })
@@ -42,13 +42,13 @@ export class SupabaseStoresRepository implements StoresRepository {
         .from('stores')
         .select(
           `
-          id,
+          domain,
           name,
-          created_at,
-          metadata
+          owner_id,
+          created_at
         `
         )
-        .eq('id', id)
+        .eq('domain', id)
         .single()
     ).pipe(
       map(({ data, error }) => {
@@ -67,14 +67,20 @@ export class SupabaseStoresRepository implements StoresRepository {
     );
   }
 
-  createStore(name: string, metadata?: Record<string, any>): Observable<Store> {
-    return from(
-      this.supabaseClient.client
-        .from('stores')
-        .insert({ name, metadata: metadata || {} })
-        .select()
-        .single()
-    ).pipe(
+  createStore(domain: string, name: string): Observable<Store> {
+    return from(this.supabaseClient.getUser()).pipe(
+      switchMap((user) => {
+        if (!user?.email) {
+          throw mapSupabaseErrorToDomainError({ message: 'User email not available' });
+        }
+        return from(
+          this.supabaseClient.client
+            .from('stores')
+            .insert({ domain, name, owner_id: user.email })
+            .select()
+            .single()
+        );
+      }),
       map(({ data, error }) => {
         if (error) {
           throw mapSupabaseErrorToDomainError(error);
@@ -90,10 +96,10 @@ export class SupabaseStoresRepository implements StoresRepository {
   updateStore(id: string, changes: Partial<Store>): Observable<Store> {
     const updateData: any = {};
     if (changes.name !== undefined) updateData.name = changes.name;
-    if (changes.metadata !== undefined) updateData.metadata = changes.metadata;
+    if (changes.ownerEmail !== undefined) updateData.owner_id = changes.ownerEmail;
 
     return from(
-      this.supabaseClient.client.from('stores').update(updateData).eq('id', id).select().single()
+      this.supabaseClient.client.from('stores').update(updateData).eq('domain', id).select().single()
     ).pipe(
       map(({ data, error }) => {
         if (error) {
@@ -108,7 +114,7 @@ export class SupabaseStoresRepository implements StoresRepository {
   }
 
   deleteStore(id: string): Observable<void> {
-    return from(this.supabaseClient.client.from('stores').delete().eq('id', id)).pipe(
+    return from(this.supabaseClient.client.from('stores').delete().eq('domain', id)).pipe(
       map(({ error }) => {
         if (error) {
           throw mapSupabaseErrorToDomainError(error);
@@ -123,11 +129,11 @@ export class SupabaseStoresRepository implements StoresRepository {
 
   private mapToStore(row: any): Store {
     return {
-      id: row.id.toString(),
+      id: row.domain,
+      domain: row.domain,
       name: row.name,
+      ownerEmail: row.owner_id,
       createdAt: row.created_at,
-      metadata: row.metadata || {},
     };
   }
 }
-

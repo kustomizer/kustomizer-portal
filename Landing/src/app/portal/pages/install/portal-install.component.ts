@@ -1,10 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-portal-install',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   template: `
     <div class="header">
       <h2>Installation Guide</h2>
@@ -30,12 +31,12 @@ import { Component } from '@angular/core';
 
     <section class="card">
       <h3>2. Initialize in Your App</h3>
-      <p class="muted">Import and configure Kustomizer with your store ID:</p>
+      <p class="muted">Import and configure Kustomizer with your store domain and user email:</p>
       <div class="code-block large">
         <pre><code>import &#123; KustomizerClient &#125; from '@kustomizer/client';
 
 const kustomizer = new KustomizerClient(&#123;
-  storeId: 'your-store-id',
+  domain: 'your-store-domain.com',
   domain: window.location.hostname
 &#125;);
 
@@ -73,31 +74,31 @@ if (config.customCSS) &#123;
     </section>
 
     <section class="card">
-      <h3>4. Configure Domains</h3>
+      <h3>4. Invite Team Members</h3>
       <p class="muted">
-        Add your store domains in the <a routerLink="/app/stores">Stores</a> section. The license
-        check will validate requests from registered domains only.
+        Add team members in the <a routerLink="/app/team">Team</a> section so they can access the
+        Kustomizer editor with their email.
       </p>
       <div class="steps">
         <div class="step">
           <div class="step-number">1</div>
           <div>
-            <strong>Go to Stores</strong>
-            <p>Navigate to your store and click "Manage Domains"</p>
+            <strong>Go to Team</strong>
+            <p>Open your team management screen</p>
           </div>
         </div>
         <div class="step">
           <div class="step-number">2</div>
           <div>
-            <strong>Add Domain</strong>
-            <p>Enter your production domain (e.g., mystore.com)</p>
+            <strong>Add team member</strong>
+            <p>Enter their email and assign a role</p>
           </div>
         </div>
         <div class="step">
           <div class="step-number">3</div>
           <div>
-            <strong>Deploy</strong>
-            <p>Deploy your app and customizations will be active!</p>
+            <strong>Start editing</strong>
+            <p>Admins and read-only users authenticate with domain + email</p>
           </div>
         </div>
       </div>
@@ -276,12 +277,21 @@ export class PortalInstallComponent {
 
   readonly initCode = `import { KustomizerClient } from '@kustomizer/client';
 
-const kustomizer = new KustomizerClient({
-  storeId: 'your-store-id',
-  domain: window.location.hostname
+const domain = window.location.hostname;
+const email = 'owner@yourstore.com';
+
+const authResponse = await fetch(\`\${SUPABASE_URL}/functions/v1/kustomizer_auth\`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ domain, email }),
 });
 
-// Fetch your customizations
+const { license } = await authResponse.json();
+if (!license.active) {
+  throw new Error('License inactive or expired');
+}
+
+const kustomizer = new KustomizerClient({ domain, email });
 const config = await kustomizer.getConfig();
 console.log(config);`;
 

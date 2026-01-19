@@ -2,8 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { AdminRepository, AdminStoreDetail } from '../../repositories/admin.repository';
-import { Store, License, Membership, LicenseLimits } from '../../models';
-import { LicenseStatus, Tier, MembershipRole, MembershipStatus } from '../../types/enums';
+import { Store, License, StoreUser } from '../../models';
+import { StoreUserRole, StoreUserStatus, Tier } from '../../types/enums';
 import {
   AdminStoresListResponse,
   AdminStoreGetRequest,
@@ -24,59 +24,56 @@ export class EdgeAdminRepository implements AdminRepository {
       .pipe(
         map((response) =>
           response.stores.map((s) => ({
-            id: s.id,
+            id: s.domain,
+            domain: s.domain,
             name: s.name,
             createdAt: s.created_at,
-            metadata: s.metadata,
+            ownerEmail: s.owner_id,
           }))
         )
       );
   }
 
   getStoreDetail(storeId: string): Observable<AdminStoreDetail> {
-    const request: AdminStoreGetRequest = { store_id: storeId };
+    const request: AdminStoreGetRequest = { domain: storeId };
 
     return this.edgeClient
       .callFunction<AdminStoreGetRequest, AdminStoreGetResponse>('admin_store_get', request)
       .pipe(
         map((response) => {
           const store: Store = {
-            id: response.store.id,
+            id: response.store.domain,
+            domain: response.store.domain,
             name: response.store.name,
             createdAt: response.store.created_at,
-            metadata: response.store.metadata,
+            ownerEmail: response.store.owner_id,
           };
 
-          const license: License | undefined = response.license
+          const license: License | null = response.license
             ? {
                 id: response.license.id,
-                storeId: storeId,
-                status: response.license.status as LicenseStatus,
                 tier: response.license.tier as Tier,
-                limits: response.license.limits as LicenseLimits || {
-                  stores: 1,
-                  domainsPerStore: 3,
-                  seats: 3,
-                },
-                expiresAt: response.license.expires_at,
-                createdAt: response.license.created_at || new Date().toISOString(),
+                createdAt: response.license.created_at,
+                expiresAt: response.license.expires_at ?? null,
+                active:
+                  !response.license.expires_at ||
+                  new Date(response.license.expires_at) > new Date(),
               }
-            : undefined;
+            : null;
 
-          const memberships: Membership[] = response.memberships.map((m) => ({
-            id: m.id,
-            storeId: storeId,
-            userId: m.user_id,
+          const storeUsers: StoreUser[] = response.store_users.map((m) => ({
+            domain: storeId,
             email: m.email,
-            role: m.role as MembershipRole,
-            status: m.status as MembershipStatus,
-            createdAt: '',
+            invitedBy: m.invited_by ?? null,
+            role: m.role as StoreUserRole,
+            status: m.status as StoreUserStatus,
+            createdAt: m.created_at,
           }));
 
           return {
             store,
             license,
-            memberships,
+            storeUsers,
           };
         })
       );
@@ -84,9 +81,9 @@ export class EdgeAdminRepository implements AdminRepository {
 
   updateStore(storeId: string, changes: Partial<Store>): Observable<Store> {
     const request: AdminStoreUpdateRequest = {
-      store_id: storeId,
+      domain: storeId,
       name: changes.name,
-      metadata: changes.metadata,
+      owner_id: changes.ownerEmail,
     };
 
     return this.edgeClient
@@ -96,30 +93,36 @@ export class EdgeAdminRepository implements AdminRepository {
 
   deleteStore(storeId: string): Observable<void> {
     return this.edgeClient
-      .callFunction<{ store_id: string }, void>('admin_store_delete', { store_id: storeId })
+      .callFunction<{ domain: string }, void>('admin_store_delete', { domain: storeId })
       .pipe(map(() => undefined));
   }
 
   updateLicense(
     licenseId: string,
     changes: {
-      status?: LicenseStatus;
       tier?: Tier;
-      limits?: LicenseLimits;
-      expiresAt?: string;
+      expiresAt?: string | null;
     }
   ): Observable<License> {
     const request: AdminLicenseUpdateRequest = {
       license_id: licenseId,
-      status: changes.status,
       tier: changes.tier,
-      limits: changes.limits,
       expires_at: changes.expiresAt,
     };
 
     return this.edgeClient
-      .callFunction<AdminLicenseUpdateRequest, { license: License }>('admin_license_update', request)
-      .pipe(map((response) => response.license));
+      .callFunction<AdminLicenseUpdateRequest, { license: any }>('admin_license_update', request)
+      .pipe(
+        map((response) => ({
+          id: response.license.license_id ?? response.license.id,
+          tier: response.license.tier as Tier,
+          createdAt: response.license.created_at,
+          expiresAt: response.license.expires_at ?? null,
+          active:
+            !response.license.expires_at ||
+            new Date(response.license.expires_at) > new Date(),
+        }))
+      );
   }
 
   isAdmin(): Observable<boolean> {
@@ -137,4 +140,3 @@ export class EdgeAdminRepository implements AdminRepository {
     );
   }
 }
-

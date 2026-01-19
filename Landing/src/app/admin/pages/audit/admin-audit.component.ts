@@ -10,7 +10,7 @@ import { AdminAuditFacade } from '../../../core/facades/admin-audit.facade';
     <div class="header">
       <div>
         <h2>Audit logs</h2>
-        <p>Track changes across licenses, stores, and domains.</p>
+        <p>Track changes across licenses, stores, and team members.</p>
       </div>
     </div>
 
@@ -21,7 +21,7 @@ import { AdminAuditFacade } from '../../../core/facades/admin-audit.facade';
       <div *ngIf="auditState.state === 'ready'" class="list">
         <div class="card" *ngFor="let log of auditState.data ?? []">
           <div>
-            <p class="label">{{ log.entityType | titlecase }} · {{ log.action | titlecase }}</p>
+            <p class="label">{{ log.entityType.replace('_', ' ') | titlecase }} · {{ log.action | titlecase }}</p>
             <h3>{{ log.summary }}</h3>
             <p class="meta">Actor {{ log.actorId }} · {{ log.timestamp | date: 'medium' }}</p>
           </div>

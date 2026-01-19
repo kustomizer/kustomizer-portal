@@ -15,8 +15,7 @@ import { AuthFacade } from '../core/facades/auth.facade';
           <small>Admin Backoffice</small>
         </div>
         <nav>
-          <a routerLink="/admin/orgs" routerLinkActive="active">Organizations</a>
-          <a routerLink="/admin/licenses" routerLinkActive="active">Licenses</a>
+          <a routerLink="/admin/stores" routerLinkActive="active">Stores</a>
           <a routerLink="/admin/audit" routerLinkActive="active">Audit logs</a>
         </nav>
       </aside>

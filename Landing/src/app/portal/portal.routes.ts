@@ -26,11 +26,6 @@ export const portalRoutes: Routes = [
           import('./pages/stores/store-detail.component').then((m) => m.StoreDetailComponent),
       },
       {
-        path: 'stores/:storeId/domains',
-        loadComponent: () =>
-          import('./pages/stores/store-domains.component').then((m) => m.StoreDomainsComponent),
-      },
-      {
         path: 'tier',
         loadComponent: () =>
           import('./pages/tier/portal-tier.component').then((m) => m.PortalTierComponent),

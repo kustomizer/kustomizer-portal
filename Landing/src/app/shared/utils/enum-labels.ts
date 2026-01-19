@@ -1,21 +1,20 @@
-import { LicenseStatus, Tier, MembershipRole, MembershipStatus } from '../../core/types/enums';
+import { StoreUserRole, StoreUserStatus, Tier } from '../../core/types/enums';
 
 /**
- * Get human-readable label for license status
+ * Get human-readable label for license status based on active/expiration.
  */
-export function getLicenseStatusLabel(status: LicenseStatus): string {
-  switch (status) {
-    case LicenseStatus.Trial:
-      return 'Trial';
-    case LicenseStatus.Active:
-      return 'Active';
-    case LicenseStatus.Expired:
-      return 'Expired';
-    case LicenseStatus.Suspended:
-      return 'Suspended';
-    default:
-      return 'Unknown';
+export function getLicenseStatusLabel(active: boolean, expiresAt?: string | null): string {
+  if (!active) {
+    return 'Expired';
   }
+  if (!expiresAt) {
+    return 'Active';
+  }
+  const days = getDaysUntilExpiration(expiresAt);
+  if (days !== null && days <= 14) {
+    return 'Expiring';
+  }
+  return 'Active';
 }
 
 /**
@@ -35,34 +34,32 @@ export function getTierLabel(tier: Tier): string {
 }
 
 /**
- * Get human-readable label for membership role
+ * Get human-readable label for store user role
  */
-export function getMembershipRoleLabel(role: MembershipRole): string {
+export function getStoreUserRoleLabel(role: StoreUserRole): string {
   switch (role) {
-    case MembershipRole.Owner:
+    case StoreUserRole.Owner:
       return 'Owner';
-    case MembershipRole.Admin:
+    case StoreUserRole.Admin:
       return 'Admin';
-    case MembershipRole.Member:
-      return 'Member';
+    case StoreUserRole.Reader:
+      return 'Read-only';
     default:
       return 'Unknown';
   }
 }
 
 /**
- * Get human-readable label for membership status
+ * Get human-readable label for store user status
  */
-export function getMembershipStatusLabel(status: MembershipStatus): string {
+export function getStoreUserStatusLabel(status: StoreUserStatus): string {
   switch (status) {
-    case MembershipStatus.Pending:
+    case StoreUserStatus.Pending:
       return 'Pending';
-    case MembershipStatus.Active:
+    case StoreUserStatus.Active:
       return 'Active';
-    case MembershipStatus.Revoked:
-      return 'Revoked';
-    case MembershipStatus.Expired:
-      return 'Expired';
+    case StoreUserStatus.Removed:
+      return 'Removed';
     default:
       return 'Unknown';
   }
@@ -71,19 +68,15 @@ export function getMembershipStatusLabel(status: MembershipStatus): string {
 /**
  * Get CSS class for license status badge
  */
-export function getLicenseStatusClass(status: LicenseStatus): string {
-  switch (status) {
-    case LicenseStatus.Trial:
-      return 'status-trial';
-    case LicenseStatus.Active:
-      return 'status-active';
-    case LicenseStatus.Expired:
-      return 'status-expired';
-    case LicenseStatus.Suspended:
-      return 'status-suspended';
-    default:
-      return 'status-unknown';
+export function getLicenseStatusClass(active: boolean, expiresAt?: string | null): string {
+  if (!active) {
+    return 'status-expired';
   }
+  const days = expiresAt ? getDaysUntilExpiration(expiresAt) : null;
+  if (days !== null && days <= 14) {
+    return 'status-warning';
+  }
+  return 'status-active';
 }
 
 /**
@@ -92,14 +85,12 @@ export function getLicenseStatusClass(status: LicenseStatus): string {
 export function getTierFeatures(tier: Tier): string[] {
   switch (tier) {
     case Tier.Starter:
-      return ['1 store', '5 domains per store', '3 team members', 'Basic support'];
+      return ['Single store', 'Core editor features', 'Email support'];
     case Tier.Growth:
-      return ['5 stores', '20 domains per store', '10 team members', 'Priority support'];
+      return ['Multiple stores', 'Advanced editor features', 'Priority support'];
     case Tier.Enterprise:
       return [
         'Unlimited stores',
-        'Unlimited domains',
-        'Unlimited team members',
         'Dedicated support',
         'Custom integrations',
       ];
@@ -160,4 +151,3 @@ export function getExpirationLabel(expiresAt?: string): string {
 
   return `Expires in ${months} months`;
 }
-
