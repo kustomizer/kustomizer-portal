@@ -1,28 +1,16 @@
-export type StoreStatus = 'connected' | 'disconnected' | 'error';
+import { StoreDomain, UserEmail } from '../types/ids';
+
+/**
+ * Store entity (maps to backend stores table)
+ */
+export interface Store {
+  id: StoreDomain; // Alias for legacy storeId usage
+  domain: StoreDomain;
+  name: string;
+  ownerEmail: UserEmail;
+  createdAt?: string;
+}
 
 export interface StoreMetadata {
-  shopName?: string;
-  email?: string;
-  country?: string;
-  currency?: string;
-  installedAt?: string;
-}
-
-export interface Store {
-  id: string;
-  orgId: string;
-  shopDomain: string;
-  status: StoreStatus;
-  connected: boolean;
-  lastSyncAt?: string;
-  lastError?: string;
-  metadata?: StoreMetadata;
-  createdAt: string;
-}
-
-export interface StoreDomain {
-  id: string;
-  storeId: string;
-  domain: string;
-  createdAt: string;
+  [key: string]: any;
 }

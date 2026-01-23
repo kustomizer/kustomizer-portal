@@ -2,115 +2,244 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { finalize } from 'rxjs/operators';
-import { PortalDashboardFacade } from '../../../core/facades/portal-dashboard.facade';
-import { License, MembershipRole } from '../../../core/models';
+import { finalize, take } from 'rxjs/operators';
+import { StoreContextFacade } from '../../../core/facades/store-context.facade';
+import { LicenseFacade } from '../../../core/facades/license.facade';
+import { Tier } from '../../../core/types/enums';
+import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
 
 @Component({
   selector: 'app-portal-dashboard',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   template: `
-    <div class="grid">
+    <!-- Onboarding Form (shown when no stores exist) -->
+    <ng-container *ngIf="storeContext$ | async as ctx">
+      <div *ngIf="ctx.state === 'empty' && ctx.data?.needsBootstrap" class="onboarding-card">
+        <div class="onboarding-header">
+          <h2>Welcome to Kustomizer!</h2>
+          <p>Let's set up your first store to get started</p>
+        </div>
+
+        <form [formGroup]="onboardingForm" (ngSubmit)="createStore()" class="onboarding-form">
+          <div class="form-group">
+            <label for="storeName">Store Name</label>
+            <input
+              id="storeName"
+              type="text"
+              formControlName="storeName"
+              placeholder="My Awesome Store"
+              [disabled]="bootstrapping"
+            />
+            <div *ngIf="onboardingForm.get('storeName')?.invalid && onboardingForm.get('storeName')?.touched" class="error-msg">
+              Store name is required
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="domain">Store Domain</label>
+            <input
+              id="domain"
+              type="text"
+              formControlName="domain"
+              placeholder="store.example.com"
+              [disabled]="bootstrapping"
+            />
+            <div *ngIf="onboardingForm.get('domain')?.invalid && onboardingForm.get('domain')?.touched" class="error-msg">
+              Domain is required
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Choose Your Tier</label>
+            <div class="tier-cards">
+              <label
+                *ngFor="let tier of tiers"
+                class="tier-card"
+                [class.selected]="onboardingForm.get('tier')?.value === tier.value"
+              >
+                <input type="radio" formControlName="tier" [value]="tier.value" />
+                <div class="tier-content">
+                  <h4>{{ tier.label }}</h4>
+                  <p class="tier-price">{{ tier.price }}</p>
+                  <ul class="tier-features">
+                    <li *ngFor="let feature of tier.features">{{ feature }}</li>
+                  </ul>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary" [disabled]="onboardingForm.invalid || bootstrapping">
+            {{ bootstrapping ? 'Creating Store...' : 'Create Store' }}
+          </button>
+
+          <div *ngIf="bootstrapError" class="error-msg">
+            {{ bootstrapError }}
+          </div>
+        </form>
+      </div>
+    </ng-container>
+
+    <!-- Dashboard Content (shown after bootstrap) -->
+    <div class="grid" *ngIf="!(storeContext$ | async)?.data?.needsBootstrap">
       <section class="card">
         <h3>License overview</h3>
-        <ng-container *ngIf="license$ | async as licenseState">
+        <ng-container *ngIf="licenseVm$ | async as licenseState">
           <div *ngIf="licenseState.state === 'loading'" class="state">Loading license...</div>
           <div *ngIf="licenseState.state === 'error'" class="state error">{{ licenseState.error }}</div>
           <div *ngIf="licenseState.state === 'empty'" class="state">No license assigned yet.</div>
-          <div *ngIf="licenseState.state === 'ready'" class="license">
+          <div *ngIf="licenseState.state === 'ready' && licenseState.data" class="license">
             <div>
               <p class="label">Status</p>
-              <h2>{{ licenseState.data?.status | titlecase }}</h2>
-              <p class="sub" *ngIf="licenseState.data">{{ licenseMessage(licenseState.data) }}</p>
+              <h2 [class]="getLicenseStatusClass(licenseState.data.license?.active ?? false, licenseState.data.license?.expiresAt)">
+                {{ licenseState.data.statusLabel }}
+              </h2>
+              <p class="sub">{{ licenseState.data.expiresIn }}</p>
             </div>
             <div>
               <p class="label">Tier</p>
-              <h2>{{ licenseState.data?.tier | titlecase }}</h2>
-              <p class="sub">Expires {{ licenseState.data?.expiresAt | date: 'mediumDate' }}</p>
+              <h2>{{ licenseState.data.tierLabel }}</h2>
+              <a class="link" routerLink="/app/tier">Change tier</a>
             </div>
-            <div>
-              <p class="label">Limits</p>
-              <p class="sub">Stores: {{ licenseState.data?.limits?.stores }}</p>
-              <p class="sub">Domains/store: {{ licenseState.data?.limits?.domainsPerStore }}</p>
-              <p class="sub">Seats: {{ licenseState.data?.limits?.seats }}</p>
-            </div>
-            <a class="cta" routerLink="/app/tier">Change tier</a>
           </div>
         </ng-container>
       </section>
 
       <section class="card">
-        <h3>Connected stores</h3>
-        <ng-container *ngIf="stores$ | async as storesState">
-          <div *ngIf="storesState.state === 'loading'" class="state">Loading stores...</div>
-          <div *ngIf="storesState.state === 'error'" class="state error">{{ storesState.error }}</div>
-          <div *ngIf="storesState.state === 'empty'" class="state">No stores connected yet.</div>
-          <div *ngIf="storesState.state === 'ready'" class="store-list">
-            <a
-              class="store"
-              *ngFor="let store of storesState.data ?? []"
-              [routerLink]="['/app/stores', store.id]"
-            >
-              <div>
-                <h4>{{ store.shopDomain }}</h4>
-                <p>{{ store.metadata?.shopName || 'Shopify store' }}</p>
-              </div>
-              <span [class.error]="store.status === 'error'">
-                {{ facade.storeStatusLabel(store) }}
-              </span>
-            </a>
+        <h3>Quick Stats</h3>
+        <ng-container *ngIf="storeContext$ | async as storeCtx">
+          <div *ngIf="storeCtx.state === 'ready' && storeCtx.data" class="stats">
+            <div class="stat">
+              <p class="label">Active Store</p>
+              <h3>{{ storeCtx.data.activeStore?.name || 'None' }}</h3>
+            </div>
+            <div class="stat">
+              <p class="label">Total Stores</p>
+              <h3>{{ storeCtx.data.stores.length }}</h3>
+            </div>
           </div>
         </ng-container>
+        
       </section>
 
       <section class="card">
-        <h3>Team & invitations</h3>
-        <div class="invite-form" [formGroup]="inviteForm">
-          <input formControlName="email" placeholder="Invite email" />
-          <select formControlName="role">
-            <option value="member">Member</option>
-            <option value="owner">Owner</option>
-          </select>
-          <button type="button" (click)="invite()" [disabled]="inviteForm.invalid || inviting">
-            {{ inviting ? 'Sending...' : 'Invite' }}
-          </button>
+        <h3>Quick Actions</h3>
+        <div class="actions">
+          <a routerLink="/app/stores" class="action-btn">
+            <span>Manage Stores</span>
+            <span class="arrow">→</span>
+          </a>
+          <a routerLink="/app/team" class="action-btn">
+            <span>Invite Team Members</span>
+            <span class="arrow">→</span>
+          </a>
+          <a routerLink="/app/tier" class="action-btn">
+            <span>Upgrade Plan</span>
+            <span class="arrow">→</span>
+          </a>
+          <a routerLink="/app/install" class="action-btn">
+            <span>Installation Guide</span>
+            <span class="arrow">→</span>
+          </a>
         </div>
-
-        <ng-container *ngIf="invitations$ | async as invitesState">
-          <div *ngIf="invitesState.state === 'loading'" class="state">Loading invites...</div>
-          <div *ngIf="invitesState.state === 'error'" class="state error">{{ invitesState.error }}</div>
-          <div *ngIf="invitesState.state === 'empty'" class="state">No pending invitations.</div>
-          <div *ngIf="invitesState.state === 'ready'" class="list">
-            <div class="list-item" *ngFor="let invite of invitesState.data ?? []">
-              <div>
-                <strong>{{ invite.email }}</strong>
-                <p>{{ invite.role | titlecase }} · {{ invite.status | titlecase }}</p>
-              </div>
-              <button type="button" (click)="accept(invite.id)">Accept</button>
-            </div>
-          </div>
-        </ng-container>
-
-        <ng-container *ngIf="members$ | async as membersState">
-          <div *ngIf="membersState.state === 'loading'" class="state">Loading members...</div>
-          <div *ngIf="membersState.state === 'error'" class="state error">{{ membersState.error }}</div>
-          <div *ngIf="membersState.state === 'empty'" class="state">No members yet.</div>
-          <div *ngIf="membersState.state === 'ready'" class="list">
-            <div class="list-item" *ngFor="let member of membersState.data ?? []">
-              <div>
-                <strong>{{ member.user?.name || member.userId }}</strong>
-                <p>{{ member.user?.email || 'unknown' }} · {{ member.role | titlecase }}</p>
-              </div>
-              <span>{{ member.createdAt | date: 'mediumDate' }}</span>
-            </div>
-          </div>
-        </ng-container>
       </section>
     </div>
   `,
   styles: [
     `
+      .onboarding-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: 3rem 2rem;
+        max-width: 900px;
+        margin: 0 auto 2rem;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .onboarding-header {
+        text-align: center;
+        margin-bottom: 2rem;
+      }
+
+      .onboarding-header h2 {
+        margin-bottom: 0.5rem;
+      }
+
+      .onboarding-header p {
+        color: var(--muted);
+      }
+
+      .onboarding-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .form-group label {
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+
+      .tier-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+      }
+
+      .tier-card {
+        position: relative;
+        padding: 1.5rem;
+        border: 2px solid var(--border);
+        border-radius: 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: var(--card-soft);
+      }
+
+      .tier-card:hover {
+        border-color: var(--primary);
+      }
+
+      .tier-card.selected {
+        border-color: var(--primary);
+        background: rgba(var(--primary-rgb), 0.1);
+      }
+
+      .tier-card input[type='radio'] {
+        position: absolute;
+        opacity: 0;
+      }
+
+      .tier-content h4 {
+        margin: 0 0 0.5rem 0;
+      }
+
+      .tier-price {
+        color: var(--primary);
+        font-weight: 600;
+        margin-bottom: 1rem;
+      }
+
+      .tier-features {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+
+      .tier-features li {
+        padding: 0.25rem 0;
+      }
+
       .grid {
         display: grid;
         gap: 1.5rem;
@@ -136,7 +265,7 @@ import { License, MembershipRole } from '../../../core/models';
 
       .license {
         display: grid;
-        gap: 1rem;
+        gap: 1.5rem;
       }
 
       .label {
@@ -144,61 +273,59 @@ import { License, MembershipRole } from '../../../core/models';
         font-size: 0.7rem;
         color: var(--muted);
         letter-spacing: 0.15em;
+        margin-bottom: 0.5rem;
       }
 
       .sub {
         color: var(--muted);
-        margin: 0;
+        margin: 0.25rem 0 0;
+        font-size: 0.9rem;
       }
 
-      .cta {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.6rem 1rem;
-        border-radius: 12px;
-        background: var(--primary);
-        color: #0a0d10;
-        font-weight: 600;
-        width: fit-content;
+      .link {
+        display: inline-block;
+        margin-top: 0.5rem;
+        color: var(--primary);
+        font-size: 0.9rem;
+        text-decoration: underline;
       }
 
-      .store-list {
+      .stats {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+
+      .stat h3 {
+        margin: 0.5rem 0 0;
+      }
+
+      .actions {
         display: grid;
         gap: 0.75rem;
+        margin-top: 1rem;
       }
 
-      .store {
+      .action-btn {
         display: flex;
-        align-items: center;
         justify-content: space-between;
-        gap: 1rem;
-        padding: 0.75rem 1rem;
-        border-radius: 16px;
+        align-items: center;
+        padding: 1rem;
+        border-radius: 14px;
         background: var(--card-soft);
         border: 1px solid transparent;
-        transition: border-color 0.2s ease;
+        transition: all 0.2s;
+        font-weight: 500;
       }
 
-      .store:hover {
+      .action-btn:hover {
         border-color: var(--primary);
+        background: rgba(var(--primary-rgb), 0.1);
       }
 
-      .store span {
-        font-size: 0.8rem;
-        color: var(--muted);
-      }
-
-      .store span.error {
-        color: var(--danger);
-      }
-
-      .invite-form {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
-        align-items: stretch;
+      .action-btn .arrow {
+        color: var(--primary);
+        font-size: 1.2rem;
       }
 
       input,
@@ -207,95 +334,142 @@ import { License, MembershipRole } from '../../../core/models';
         border-radius: 12px;
         border: 1px solid var(--border);
         background: transparent;
-        padding: 0.5rem 0.75rem;
+        padding: 0.75rem 1rem;
         color: var(--foreground);
+        font-size: 1rem;
       }
 
-      button {
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: var(--primary);
+      }
+
+      .btn-primary {
         width: 100%;
+        padding: 1rem;
         border-radius: 12px;
         border: none;
         background: var(--primary);
         color: #0a0d10;
         font-weight: 600;
+        font-size: 1rem;
         cursor: pointer;
+        transition: opacity 0.2s;
       }
 
-      .list {
-        display: grid;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
+      .btn-primary:hover:not(:disabled) {
+        opacity: 0.9;
       }
 
-      .list-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-        padding: 0.6rem 0.8rem;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.04);
+      .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .error-msg {
+        color: var(--danger);
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
+      }
+
+      .status-trial {
+        color: #fbbf24;
+      }
+
+      .status-active {
+        color: #10b981;
+      }
+
+      .status-expired {
+        color: #ef4444;
+      }
+
+      .status-warning {
+        color: #f59e0b;
       }
 
       @media (max-width: 720px) {
-        .invite-form {
-          width: 100%;
+        .onboarding-card {
+          padding: 2rem 1.5rem;
+        }
+
+        .tier-cards {
+          grid-template-columns: 1fr;
         }
       }
     `,
   ],
 })
 export class PortalDashboardComponent {
-  readonly facade = inject(PortalDashboardFacade);
+  private readonly storeContextFacade = inject(StoreContextFacade);
+  private readonly licenseFacade = inject(LicenseFacade);
   private readonly formBuilder = inject(FormBuilder);
 
-  readonly license$ = this.facade.license$;
-  readonly stores$ = this.facade.stores$;
-  readonly invitations$ = this.facade.invitations$;
-  readonly members$ = this.facade.members$;
+  readonly storeContext$ = this.storeContextFacade.vm$;
+  readonly licenseVm$ = this.licenseFacade.vm$;
 
-  inviting = false;
+  bootstrapping = false;
+  bootstrapError: string | null = null;
 
-  readonly inviteForm = this.formBuilder.nonNullable.group({
-    email: ['', [Validators.required, Validators.email]],
-    role: ['member' as MembershipRole, Validators.required],
+  readonly tiers = [
+    {
+      value: Tier.Starter,
+      label: 'Starter',
+      price: '$29/mo',
+      features: ['Single store', 'Core editor features', 'Email support'],
+    },
+    {
+      value: Tier.Growth,
+      label: 'Growth',
+      price: '$99/mo',
+      features: ['Multiple stores', 'Advanced editor features', 'Priority support'],
+    },
+    {
+      value: Tier.Enterprise,
+      label: 'Enterprise',
+      price: 'Custom',
+      features: [
+        'Unlimited stores',
+        'Dedicated support',
+        'Custom integrations',
+      ],
+    },
+  ];
+
+  readonly onboardingForm = this.formBuilder.nonNullable.group({
+    storeName: ['', [Validators.required, Validators.minLength(2)]],
+    domain: ['', [Validators.required, Validators.minLength(3)]],
+    tier: [Tier.Starter, Validators.required],
   });
 
-  invite(): void {
-    if (this.inviteForm.invalid) {
+  createStore(): void {
+    if (this.onboardingForm.invalid) {
       return;
     }
-    const { email, role } = this.inviteForm.getRawValue();
-    if (!email || !role) {
-      return;
-    }
-    this.inviting = true;
-    this.facade
-      .inviteMember(email, role as MembershipRole)
-      .pipe(finalize(() => (this.inviting = false)))
-      .subscribe(() => {
-        this.inviteForm.reset({ email: '', role: 'member' });
-        this.facade.refresh();
+
+    const { storeName, domain, tier } = this.onboardingForm.getRawValue();
+    this.bootstrapping = true;
+    this.bootstrapError = null;
+
+    this.storeContextFacade
+      .bootstrapStore(storeName, domain, tier)
+      .pipe(
+        take(1),
+        finalize(() => (this.bootstrapping = false))
+      )
+      .subscribe({
+        next: () => {
+          // Success - the dashboard will automatically show after bootstrap
+          this.onboardingForm.reset({ storeName: '', domain: '', tier: Tier.Starter });
+        },
+        error: (error) => {
+          this.bootstrapError = error.message || 'Failed to create store. Please try again.';
+        },
       });
   }
 
-  accept(invitationId: string): void {
-    this.facade.acceptInvitation(invitationId).subscribe(() => this.facade.refresh());
-  }
-
-  licenseMessage(license: License): string {
-    if (license.status === 'trial' && license.expiresAt) {
-      const days = this.daysUntil(license.expiresAt);
-      return `Trial ends in ${days} day${days === 1 ? '' : 's'}`;
-    }
-    if (license.status === 'expired') {
-      return 'Your license is expired. Please upgrade.';
-    }
-    return 'Your plan is active.';
-  }
-
-  private daysUntil(date: string): number {
-    const diff = new Date(date).getTime() - Date.now();
-    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  getLicenseStatusClass(active: boolean, expiresAt?: string | null): string {
+    return getLicenseStatusClass(active, expiresAt);
   }
 }

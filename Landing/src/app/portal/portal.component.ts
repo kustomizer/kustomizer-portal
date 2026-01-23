@@ -18,14 +18,15 @@ import { AuthFacade } from '../core/facades/auth.facade';
           <a routerLink="/app/dashboard" routerLinkActive="active">Dashboard</a>
           <a routerLink="/app/stores" routerLinkActive="active">Stores</a>
           <a routerLink="/app/tier" routerLinkActive="active">Change tier</a>
+          <a routerLink="/app/team" routerLinkActive="active">Team</a>
           <a routerLink="/app/install" routerLinkActive="active">Installation</a>
         </nav>
       </aside>
       <div class="content">
         <header>
-          <div class="context" *ngIf="(org$ | async) as org">
-            <p class="eyebrow">Organization</p>
-            <h2>{{ org.name }}</h2>
+          <div class="context" *ngIf="(activeStore$ | async) as store">
+            <p class="eyebrow">Store</p>
+            <h2>{{ store.name }}</h2>
           </div>
           <div class="user" *ngIf="(user$ | async) as user">
             <div>
@@ -169,7 +170,7 @@ export class PortalComponent {
   private readonly router = inject(Router);
 
   readonly user$ = this.auth.currentUser$;
-  readonly org$ = this.auth.activeOrganization$;
+  readonly activeStore$ = this.auth.activeStore$;
 
   logout(): void {
     this.auth.logout().subscribe(() => {

@@ -1,18 +1,13 @@
-export type LicenseStatus = 'trial' | 'active' | 'expired';
-export type LicenseTier = 'starter' | 'growth' | 'enterprise';
+import { Tier } from '../types/enums';
+import { LicenseId } from '../types/ids';
 
-export interface LicenseLimits {
-  stores: number;
-  domainsPerStore: number;
-  seats: number;
-}
-
+/**
+ * License entity (maps to backend licenses table)
+ */
 export interface License {
-  id: string;
-  orgId: string;
-  status: LicenseStatus;
-  tier: LicenseTier;
-  startedAt: string;
-  expiresAt?: string;
-  limits: LicenseLimits;
+  id: LicenseId;
+  tier: Tier;
+  createdAt: string;
+  expiresAt?: string | null;
+  active: boolean;
 }

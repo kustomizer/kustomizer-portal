@@ -1,9 +1,10 @@
 import { Observable } from 'rxjs';
 import { License } from '../models';
+import { Tier } from '../types/enums';
 
 export interface LicensesRepository {
   listLicenses(): Observable<License[]>;
-  getLicenseForOrg(orgId: string): Observable<License | null>;
+  getLicenseByStore(domain: string): Observable<License | null>;
   updateLicense(id: string, changes: Partial<License>): Observable<License>;
-  createLicense(orgId: string, license: Omit<License, 'id' | 'orgId'>): Observable<License>;
+  updateTier?(licenseId: string, tier: Tier): Observable<License>;
 }

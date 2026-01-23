@@ -2,23 +2,26 @@ import { Provider } from '@angular/core';
 import {
   AUDIT_LOGS_REPOSITORY,
   AUTH_REPOSITORY,
-  DOMAINS_REPOSITORY,
   LICENSES_REPOSITORY,
-  ORGANIZATIONS_REPOSITORY,
   STORES_REPOSITORY,
+  STORE_USERS_REPOSITORY,
+  BOOTSTRAP_REPOSITORY,
+  ADMIN_REPOSITORY,
 } from '../repositories';
-import { InMemoryAuditLogsRepository } from '../mocks/in-memory-audit-logs.repository';
-import { InMemoryAuthRepository } from '../mocks/in-memory-auth.repository';
-import { InMemoryDomainsRepository } from '../mocks/in-memory-domains.repository';
-import { InMemoryLicensesRepository } from '../mocks/in-memory-licenses.repository';
-import { InMemoryOrganizationsRepository } from '../mocks/in-memory-organizations.repository';
-import { InMemoryStoresRepository } from '../mocks/in-memory-stores.repository';
+
+// Mock repositories are temporarily disabled until they're updated to match new interfaces
+// Use production repositories (provideProductionRepositories) instead
 
 export const provideMockRepositories = (): Provider[] => [
-  { provide: AUTH_REPOSITORY, useClass: InMemoryAuthRepository },
-  { provide: ORGANIZATIONS_REPOSITORY, useClass: InMemoryOrganizationsRepository },
-  { provide: LICENSES_REPOSITORY, useClass: InMemoryLicensesRepository },
-  { provide: STORES_REPOSITORY, useClass: InMemoryStoresRepository },
-  { provide: DOMAINS_REPOSITORY, useClass: InMemoryDomainsRepository },
-  { provide: AUDIT_LOGS_REPOSITORY, useClass: InMemoryAuditLogsRepository },
+  // TODO: Update mock repositories to match new interfaces
+  // For now, use provideProductionRepositories() in app.config.ts
+  
+  // Commented out until mocks are updated:
+  // { provide: AUTH_REPOSITORY, useClass: InMemoryAuthRepository },
+  // { provide: STORES_REPOSITORY, useClass: InMemoryStoresRepository },
+  // { provide: LICENSES_REPOSITORY, useClass: InMemoryLicensesRepository },
+  // { provide: STORE_USERS_REPOSITORY, useClass: InMemoryStoreUsersRepository },
+  // { provide: BOOTSTRAP_REPOSITORY, useClass: InMemoryBootstrapRepository },
+  // { provide: ADMIN_REPOSITORY, useClass: InMemoryAdminRepository },
+  // { provide: AUDIT_LOGS_REPOSITORY, useClass: InMemoryAuditLogsRepository },
 ];

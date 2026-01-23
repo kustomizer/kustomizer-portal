@@ -2,9 +2,10 @@ import { Observable } from 'rxjs';
 import { Store } from '../models';
 
 export interface StoresRepository {
-  listStores(orgId: string): Observable<Store[]>;
-  getStore(id: string): Observable<Store | null>;
-  createStore(orgId: string, store: Omit<Store, 'id' | 'orgId' | 'createdAt'>): Observable<Store>;
-  updateStore(id: string, changes: Partial<Store>): Observable<Store>;
-  deleteStore(id: string): Observable<void>;
+  // List stores owned by the current user (RLS enforced)
+  listMyStores(): Observable<Store[]>;
+  getStore(domain: string): Observable<Store | null>;
+  createStore(domain: string, name: string): Observable<Store>;
+  updateStore(domain: string, changes: Partial<Store>): Observable<Store>;
+  deleteStore(domain: string): Observable<void>;
 }

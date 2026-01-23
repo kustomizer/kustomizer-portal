@@ -1,10 +1,7 @@
 export type AuditEntityType =
-  | 'organization'
-  | 'membership'
-  | 'invitation'
   | 'license'
   | 'store'
-  | 'domain';
+  | 'store_user';
 
 export interface AuditLog {
   id: string;
