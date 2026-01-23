@@ -24,7 +24,7 @@
   "private": true,
   "packageManager": "npm@11.6.2",
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "overrides": {
     "yargs": "17.7.2",
