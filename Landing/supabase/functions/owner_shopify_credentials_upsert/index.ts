@@ -89,18 +89,23 @@ async function shopifyGraphQL(shopifyDomain: string, accessToken: string, query:
   }
 }
 
-async function fetchShopInfo(shopifyDomain: string, accessToken: string): Promise<any> {
-  // Use GraphQL to avoid relying on REST permissions.
-  const query = `query { shop { id name domain myshopifyDomain } }`;
+async function validateCredentials(shopifyDomain: string, accessToken: string): Promise<{ ok: boolean }> {
+  // Validate using an operation that requires only read_metaobjects.
+  // This keeps required scopes aligned with our integration (read/write_metaobjects).
+  const query = `query { metaobjectDefinitions(first: 1) { edges { node { id type } } } }`;
   const resp = await shopifyGraphQL(shopifyDomain, accessToken, query);
 
   if (!resp.ok) {
-    return { ok: false, status: resp.status };
+    return { ok: false };
   }
 
-  const shop = resp.json?.data?.shop ?? null;
-  return { ok: true, shop };
+  if (resp.json?.errors?.length) {
+    return { ok: false };
+  }
+
+  return { ok: true };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -151,15 +156,12 @@ Deno.serve(async (req) => {
   }
 
   // Verify credentials against Shopify and extract a canonical domain if available.
-  const shopInfo = await fetchShopInfo(shopifyDomain, accessToken);
-  if (!shopInfo.ok) {
+  const credentialCheck = await validateCredentials(shopifyDomain, accessToken);
+  if (!credentialCheck.ok) {
     return errorResponse(422, 'Invalid Shopify credentials');
   }
 
-  const canonicalShopifyDomain =
-    (shopInfo.shop?.myshopifyDomain as string | undefined)?.trim() ||
-    (shopInfo.shop?.domain as string | undefined)?.trim() ||
-    shopifyDomain;
+  const canonicalShopifyDomain = shopifyDomain;
 
   let encrypted;
   try {
