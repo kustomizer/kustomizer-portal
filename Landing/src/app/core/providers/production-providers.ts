@@ -6,6 +6,7 @@ import {
   STORE_USERS_REPOSITORY,
   BOOTSTRAP_REPOSITORY,
   ADMIN_REPOSITORY,
+  SHOPIFY_CREDENTIALS_REPOSITORY,
 } from '../repositories';
 import { SupabaseAuthRepository } from '../infrastructure/supabase/supabase-auth.repository';
 import { SupabaseStoresRepository } from '../infrastructure/supabase/supabase-stores.repository';
@@ -13,6 +14,7 @@ import { SupabaseLicensesRepository } from '../infrastructure/supabase/supabase-
 import { EdgeStoreUsersRepository } from '../infrastructure/edge/edge-store-users.repository';
 import { EdgeBootstrapRepository } from '../infrastructure/edge/edge-bootstrap.repository';
 import { EdgeAdminRepository } from '../infrastructure/edge/edge-admin.repository';
+import { EdgeShopifyCredentialsRepository } from '../infrastructure/edge/edge-shopify-credentials.repository';
 import { SupabaseClientService } from '../infrastructure/supabase/supabase-client.service';
 import { EdgeClientService } from '../infrastructure/edge/edge-client.service';
 
@@ -34,4 +36,5 @@ export const provideProductionRepositories = (): Provider[] => [
   { provide: STORE_USERS_REPOSITORY, useClass: EdgeStoreUsersRepository },
   { provide: BOOTSTRAP_REPOSITORY, useClass: EdgeBootstrapRepository },
   { provide: ADMIN_REPOSITORY, useClass: EdgeAdminRepository },
+  { provide: SHOPIFY_CREDENTIALS_REPOSITORY, useClass: EdgeShopifyCredentialsRepository },
 ];

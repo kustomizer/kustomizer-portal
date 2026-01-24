@@ -39,6 +39,16 @@ store_users (
   status text,       -- active | removed | pending
   primary key (domain, email)
 )
+
+store_shopify_credentials (
+  domain text primary key references stores(domain),
+  shopify_domain text,
+  access_token_ciphertext text,
+  access_token_iv text,
+  created_at timestamptz,
+  updated_at timestamptz,
+  last_validated_at timestamptz null
+)
 ```
 
 ### Access Model
@@ -1129,10 +1139,26 @@ Public / editor authentication:
   - used by the Kustomizer editor to validate access
   - role is `admin` or `reader` (owner is treated as admin for editor)
 
+- `kustomizer_shopify_metaobject_upsert({ domain, email, handle, fields })`
+  - validates membership + license
+  - uses stored Shopify credentials to upsert a metaobject (GraphQL `metaobjectUpsert`)
+  - requires Shopify scopes: `read_metaobjects`, `write_metaobjects`
+  - returns `{ ok, metaobject, userErrors }`
+
+- `kustomizer_shopify_metaobject_get({ domain, email, handle })`
+  - validates membership + license
+  - uses stored Shopify credentials to fetch a metaobject (GraphQL `metaobjectByHandle`)
+  - requires Shopify scope: `read_metaobjects`
+  - returns `{ ok, metaobject }`
+
 Owner / portal:
 
 - `bootstrap_owner_store({ store_name, domain, tier })`
   - creates store + license + owner mapping (tier used on first store only)
+- `owner_shopify_credentials_upsert({ domain, shopify_domain, access_token })`
+  - owner-only
+  - validates token against Shopify and stores it encrypted
+  - returns `{ ok, shopify_domain, last_validated_at }`
 - `invite_store_user({ domain, email, role })`
   - adds admin/reader to `store_users`
 - `remove_store_user({ domain, email })`

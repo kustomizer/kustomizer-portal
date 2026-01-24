@@ -1,15 +1,17 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Observable, switchMap, of } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, of, switchMap } from 'rxjs';
+import { finalize, map } from 'rxjs/operators';
+import { ShopifyCredentialsFacade } from '../../../core/facades/shopify-credentials.facade';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
 import { Store } from '../../../core/models';
 
 @Component({
   selector: 'app-store-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ReactiveFormsModule],
   template: `
     <div class="header">
       <div>
@@ -41,9 +43,54 @@ import { Store } from '../../../core/models';
         </section>
 
         <section class="card">
+          <h3>Shopify Connection</h3>
+          <p class="muted">
+            Add a Shopify Admin API access token. The token is stored encrypted and will not be shown again.
+          </p>
+
+          <form class="shopify-form" [formGroup]="shopifyForm" (ngSubmit)="saveShopify(store.domain)">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="shopifyDomain">Shopify domain</label>
+                <input
+                  id="shopifyDomain"
+                  type="text"
+                  formControlName="shopifyDomain"
+                  placeholder="your-shop.myshopify.com"
+                  [disabled]="savingShopify"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="accessToken">Access token</label>
+                <input
+                  id="accessToken"
+                  type="password"
+                  formControlName="accessToken"
+                  placeholder="shpat_..."
+                  [disabled]="savingShopify"
+                />
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary" [disabled]="shopifyForm.invalid || savingShopify">
+              {{ savingShopify ? 'Saving...' : 'Save & verify' }}
+            </button>
+
+            <div *ngIf="shopifyError" class="state error">{{ shopifyError }}</div>
+            <div *ngIf="shopifySuccess" class="state success">{{ shopifySuccess }}</div>
+          </form>
+        </section>
+
+        <section class="card">
           <h3>Quick Actions</h3>
           <div class="actions">
-            <button type="button" (click)="setAsActive(store.id)" class="action-btn" [disabled]="isActive(store.id)">
+            <button
+              type="button"
+              (click)="setAsActive(store.id)"
+              class="action-btn"
+              [disabled]="isActive(store.id)"
+            >
               <span>{{ isActive(store.id) ? 'Current Active Store' : 'Set as Active Store' }}</span>
               <span class="arrow" *ngIf="!isActive(store.id)">→</span>
             </button>
@@ -80,12 +127,20 @@ import { Store } from '../../../core/models';
 
       .state {
         color: var(--muted);
-        padding: 2rem;
-        text-align: center;
+        padding: 0.75rem 0;
       }
 
       .state.error {
         color: var(--danger);
+      }
+
+      .state.success {
+        color: #10b981;
+      }
+
+      .muted {
+        margin: 0 0 1rem 0;
+        color: var(--muted);
       }
 
       .content {
@@ -101,7 +156,7 @@ import { Store } from '../../../core/models';
       }
 
       .card h3 {
-        margin: 0 0 1rem 0;
+        margin: 0 0 0.75rem 0;
       }
 
       .info-grid {
@@ -127,6 +182,61 @@ import { Store } from '../../../core/models';
       .info-item p {
         margin: 0;
         font-size: 1rem;
+      }
+
+      .shopify-form {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .form-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .form-group label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      .form-group input {
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--foreground);
+        font-size: 1rem;
+      }
+
+      .form-group input:focus {
+        outline: none;
+        border-color: var(--primary);
+      }
+
+      .btn-primary {
+        padding: 0.85rem 1.5rem;
+        border-radius: 12px;
+        border: none;
+        background: var(--primary);
+        color: #0a0d10;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        justify-self: start;
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
       }
 
       .actions {
@@ -169,6 +279,17 @@ import { Store } from '../../../core/models';
 export class StoreDetailComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly storeContext = inject(StoreContextFacade);
+  private readonly shopifyCredentials = inject(ShopifyCredentialsFacade);
+  private readonly formBuilder = inject(FormBuilder);
+
+  savingShopify = false;
+  shopifyError = '';
+  shopifySuccess = '';
+
+  readonly shopifyForm = this.formBuilder.group({
+    shopifyDomain: ['', [Validators.required]],
+    accessToken: ['', [Validators.required]],
+  });
 
   readonly store$: Observable<Store | null> = this.route.params.pipe(
     switchMap((params) => {
@@ -199,4 +320,32 @@ export class StoreDetailComponent {
     return active;
   }
 
+  saveShopify(domain: string): void {
+    if (this.shopifyForm.invalid || this.savingShopify) {
+      return;
+    }
+
+    this.shopifyError = '';
+    this.shopifySuccess = '';
+    this.savingShopify = true;
+
+    const { shopifyDomain, accessToken } = this.shopifyForm.getRawValue();
+
+    this.shopifyCredentials
+      .upsertCredentials(domain, shopifyDomain ?? '', accessToken ?? '')
+      .pipe(
+        finalize(() => {
+          this.savingShopify = false;
+        })
+      )
+      .subscribe({
+        next: (result) => {
+          this.shopifySuccess = `Connected to ${result.shopifyDomain}`;
+          this.shopifyForm.patchValue({ accessToken: '' });
+        },
+        error: (error: Error) => {
+          this.shopifyError = error instanceof Error ? error.message : 'Failed to save Shopify credentials.';
+        },
+      });
+  }
 }

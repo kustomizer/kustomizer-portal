@@ -98,3 +98,69 @@ export interface AdminLicenseUpdateRequest {
   tier?: string;
   expires_at?: string | null;
 }
+
+// Owner - Shopify Credentials Upsert
+export interface OwnerShopifyCredentialsUpsertRequest {
+  domain: string;
+  shopify_domain?: string;
+  shop?: string;
+  access_token?: string;
+  accessToken?: string;
+}
+
+export interface OwnerShopifyCredentialsUpsertResponse {
+  ok: boolean;
+  shopify_domain: string;
+  last_validated_at: string | null;
+}
+
+// Kustomizer - Shopify Metaobjects
+export interface KustomizerShopifyMetaobjectHandle {
+  type: string;
+  handle: string;
+}
+
+export interface KustomizerShopifyMetaobjectFieldInput {
+  key: string;
+  value: string;
+}
+
+export interface KustomizerShopifyMetaobjectUpsertRequest {
+  domain: string;
+  email: string;
+  handle: KustomizerShopifyMetaobjectHandle;
+  fields: KustomizerShopifyMetaobjectFieldInput[];
+}
+
+export interface KustomizerShopifyMetaobjectUpsertResponse {
+  ok: boolean;
+  metaobject: {
+    id: string;
+    type: string;
+    handle: string;
+    fields: Array<{ key: string; value: string }>;
+    updatedAt?: string;
+  } | null;
+  userErrors?: Array<{
+    field?: string[];
+    message: string;
+    code?: string;
+  }>;
+}
+
+export interface KustomizerShopifyMetaobjectGetRequest {
+  domain: string;
+  email: string;
+  handle: KustomizerShopifyMetaobjectHandle;
+}
+
+export interface KustomizerShopifyMetaobjectGetResponse {
+  ok: boolean;
+  metaobject: {
+    id: string;
+    type: string;
+    handle: string;
+    fields: Array<{ key: string; value: string }>;
+    updatedAt?: string;
+  } | null;
+}
