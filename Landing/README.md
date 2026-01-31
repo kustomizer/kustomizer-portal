@@ -16,6 +16,29 @@ ng serve
 - Admin: `http://localhost:4200/admin`
 - Login selector: `http://localhost:4200/login`
 
+## Favicons / app icons
+
+We keep a single source logo image (`kustomizerlogoblue.png` at repo root) and generate the standard favicon + app icon set into `Landing/public/`.
+
+Wiring:
+- `Landing/src/index.html` references `favicon.ico`, PNG sizes, `apple-touch-icon`, and `site.webmanifest`.
+- `Landing/angular.json` serves everything inside `Landing/public/` as static assets.
+
+### Regenerate icons (when the logo changes)
+
+From the repo root:
+
+```bash
+sips -z 16 16 kustomizerlogoblue.png --out Landing/public/favicon-16x16.png
+sips -z 32 32 kustomizerlogoblue.png --out Landing/public/favicon-32x32.png
+sips -z 180 180 kustomizerlogoblue.png --out Landing/public/apple-touch-icon.png
+sips -z 192 192 kustomizerlogoblue.png --out Landing/public/android-chrome-192x192.png
+sips -z 512 512 kustomizerlogoblue.png --out Landing/public/android-chrome-512x512.png
+
+# Multi-size ICO (16x16 + 32x32)
+npx -y to-ico-cli Landing/public/favicon-16x16.png Landing/public/favicon-32x32.png > Landing/public/favicon.ico
+```
+
 ### Change active user (mock auth)
 
 Use the login selector page (`/login`) to choose a seeded user or create a new workspace. Sessions are stored in `localStorage` under `kustomizer.session` and expire after 8 hours.
