@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { BehaviorSubject, Observable, of, combineLatest } from 'rxjs';
+import { BehaviorSubject, Observable, of, combineLatest, throwError } from 'rxjs';
 import { map, switchMap, tap, catchError, shareReplay } from 'rxjs/operators';
 import { Store } from '../models';
 import { Tier } from '../types/enums';
@@ -95,7 +95,7 @@ export class StoreContextFacade {
       map(() => undefined),
       catchError((error) => {
         console.error('Bootstrap failed:', error);
-        throw error;
+        return throwError(() => error);
       })
     );
   }

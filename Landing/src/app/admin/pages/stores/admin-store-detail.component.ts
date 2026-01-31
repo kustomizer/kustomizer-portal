@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize, take } from 'rxjs/operators';
@@ -336,6 +336,7 @@ export class AdminStoreDetailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly adminFacade = inject(AdminFacade);
   private readonly fb = inject(FormBuilder);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly detail$ = this.adminFacade.selectedStoreDetail$;
   readonly Tier = Tier;
@@ -366,6 +367,8 @@ export class AdminStoreDetailComponent implements OnInit {
               ? this.formatDateTimeLocal(license.expiresAt)
               : '',
           });
+
+          this.cdr.detectChanges();
         }
       });
     }
@@ -395,6 +398,8 @@ export class AdminStoreDetailComponent implements OnInit {
     this.errorMessage = null;
     this.successMessage = null;
 
+    this.cdr.detectChanges();
+
     this.adminFacade
       .updateLicense(licenseId, {
         tier: formValue.tier!,
@@ -402,15 +407,20 @@ export class AdminStoreDetailComponent implements OnInit {
       })
       .pipe(
         take(1),
-        finalize(() => (this.isUpdating = false))
+        finalize(() => {
+          this.isUpdating = false;
+          this.cdr.detectChanges();
+        })
       )
       .subscribe({
         next: () => {
           this.successMessage = 'License updated successfully!';
+          this.cdr.detectChanges();
           setTimeout(() => (this.successMessage = null), 5000);
         },
         error: (error) => {
           this.errorMessage = error.message || 'Failed to update license. Please try again.';
+          this.cdr.detectChanges();
         },
       });
   }

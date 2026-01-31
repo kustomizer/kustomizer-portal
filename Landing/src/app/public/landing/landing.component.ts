@@ -1,15 +1,28 @@
-import { CommonModule } from '@angular/common';
-import { Component, HostListener } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { ChangeDetectorRef, Component, HostListener, inject, PLATFORM_ID } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { IconPipe } from '../../shared/icon.pipe';
+import { AuthFacade } from '../../core/facades/auth.facade';
+import { of } from 'rxjs';
+import { environment } from '../../../environment/environment';
 
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [CommonModule, IconPipe],
+  imports: [CommonModule, RouterLink, IconPipe],
   templateUrl: './landing.component.html',
   styleUrl: './landing.component.css'
 })
 export class LandingComponent {
+  private readonly auth = inject(AuthFacade);
+  private readonly platformId = inject(PLATFORM_ID);
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  readonly demoEmail = environment.publicDemoEmail;
+  readonly calendlyUrl = environment.publicCalendlyUrl;
+
+  readonly session$ = isPlatformBrowser(this.platformId) ? this.auth.session$ : of(null);
+
   readonly navLinks = [
     { href: '#product', label: 'Product' },
     { href: '#how-it-works', label: 'How it works' },
@@ -23,13 +36,11 @@ export class LandingComponent {
     { icon: 'gauge', text: 'Keep Core Web Vitals' },
   ];
 
-  readonly trustLogos = [
-    'Enterprise Brand',
-    'Fashion Co',
-    'Home Goods',
-    'Sports Gear',
-    'Luxury Watch',
-    'Beauty Brand',
+  readonly compatibilityItems = [
+    { icon: 'shoppingBag', label: 'Shopify / Shopify Plus' },
+    { icon: 'layers', label: 'Angular SSR storefronts' },
+    { icon: 'database', label: 'Shopify metafields' },
+    { icon: 'shield', label: 'Built with enterprise workflows in mind' },
   ];
 
   readonly painPoints = [
@@ -316,16 +327,11 @@ export class LandingComponent {
       { label: 'Comparison', href: '#differentiation' },
       { label: 'FAQ', href: '#faq' },
     ],
-    company: [
-      { label: 'About', href: '#' },
-      { label: 'Blog', href: '#' },
-      { label: 'Careers', href: '#' },
-      { label: 'Contact', href: '#demo' },
-    ],
+    company: [{ label: 'Contact', href: '/contact' }],
     legal: [
-      { label: 'Privacy Policy', href: '#' },
-      { label: 'Terms of Service', href: '#' },
-      { label: 'Security', href: '#' },
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Terms of Service', href: '/terms' },
+      { label: 'Security', href: '/security' },
     ],
   };
 
@@ -377,10 +383,50 @@ export class LandingComponent {
     }
 
     this.formStatus = 'submitting';
+    this.cdr.detectChanges();
 
-    setTimeout(() => {
-      this.formStatus = 'done';
-      form.reset();
-    }, 900);
+    const data = new FormData(form);
+    const payload = {
+      name: String(data.get('name') || ''),
+      email: String(data.get('email') || ''),
+      company: String(data.get('company') || ''),
+      platform: String(data.get('platform') || ''),
+      stack: String(data.get('stack') || ''),
+      gmv: String(data.get('gmv') || ''),
+      preferredTime: String(data.get('preferredTime') || ''),
+      notes: String(data.get('notes') || ''),
+    };
+
+    const subject = `Kustomizer demo request - ${payload.company || payload.email || 'New lead'}`;
+    const bodyLines = [
+      'New demo request from the landing page:',
+      '',
+      `Name: ${payload.name}`,
+      `Email: ${payload.email}`,
+      `Company: ${payload.company}`,
+      `Platform: ${payload.platform}`,
+      `Stack: ${payload.stack}`,
+      `Monthly GMV: ${payload.gmv}`,
+      `Preferred time: ${payload.preferredTime}`,
+      '',
+      'Notes:',
+      payload.notes,
+      '',
+      '---',
+      'Sent via landing mailto flow',
+    ];
+
+    const mailtoHref = `mailto:${encodeURIComponent(this.demoEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
+      bodyLines.join('\n')
+    )}`;
+
+    if (isPlatformBrowser(this.platformId)) {
+      // This intentionally hands off to the user's email client.
+      window.location.href = mailtoHref;
+    }
+
+    this.formStatus = 'done';
+    form.reset();
+    this.cdr.detectChanges();
   }
 }

@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { finalize, take, switchMap, map } from 'rxjs/operators';
+import { EMPTY } from 'rxjs';
+import { finalize, take, switchMap, map, catchError } from 'rxjs/operators';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
 import { LicenseFacade } from '../../../core/facades/license.facade';
 import { Tier } from '../../../core/types/enums';
@@ -299,6 +300,7 @@ export class StoreListComponent {
   private readonly storeContext = inject(StoreContextFacade);
   private readonly licenseFacade = inject(LicenseFacade);
   private readonly fb = inject(FormBuilder);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly vm$ = this.storeContext.vm$;
   readonly Tier = Tier;
@@ -336,16 +338,22 @@ export class StoreListComponent {
               : tier;
           return this.storeContext.bootstrapStore(storeName, domain, resolvedTier);
         }),
-        finalize(() => (this.isCreating = false))
+        catchError((error) => {
+          this.createError = error instanceof Error ? error.message : 'Failed to create store. Please try again.';
+          this.cdr.detectChanges();
+          return EMPTY;
+        }),
+        finalize(() => {
+          this.isCreating = false;
+          this.cdr.detectChanges();
+        })
       )
       .subscribe({
         next: () => {
           this.createSuccess = 'Store created successfully.';
           this.createForm.reset({ storeName: '', domain: '', tier: Tier.Starter });
+          this.cdr.detectChanges();
           setTimeout(() => (this.createSuccess = null), 3000);
-        },
-        error: (error) => {
-          this.createError = error.message || 'Failed to create store. Please try again.';
         },
       });
   }

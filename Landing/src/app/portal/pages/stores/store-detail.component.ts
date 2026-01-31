@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, of, switchMap } from 'rxjs';
@@ -281,6 +281,7 @@ export class StoreDetailComponent {
   private readonly storeContext = inject(StoreContextFacade);
   private readonly shopifyCredentials = inject(ShopifyCredentialsFacade);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   savingShopify = false;
   shopifyError = '';
@@ -329,6 +330,8 @@ export class StoreDetailComponent {
     this.shopifySuccess = '';
     this.savingShopify = true;
 
+    this.cdr.detectChanges();
+
     const { shopifyDomain, accessToken } = this.shopifyForm.getRawValue();
 
     this.shopifyCredentials
@@ -336,15 +339,18 @@ export class StoreDetailComponent {
       .pipe(
         finalize(() => {
           this.savingShopify = false;
+          this.cdr.detectChanges();
         })
       )
       .subscribe({
         next: (result) => {
           this.shopifySuccess = `Connected to ${result.shopifyDomain}`;
           this.shopifyForm.patchValue({ accessToken: '' });
+          this.cdr.detectChanges();
         },
         error: (error: Error) => {
           this.shopifyError = error instanceof Error ? error.message : 'Failed to save Shopify credentials.';
+          this.cdr.detectChanges();
         },
       });
   }

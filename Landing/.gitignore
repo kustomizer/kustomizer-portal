@@ -46,3 +46,8 @@ Thumbs.db
 /supabase/supabase/.temp
 .vercel
 .env*.local
+
+# OpenCode Workbench
+/.opencode-workbench/
+/.opencode-workbench-backup/
+# End OpenCode Workbench

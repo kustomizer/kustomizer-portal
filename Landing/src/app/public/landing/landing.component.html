@@ -11,7 +11,12 @@
       </nav>
 
       <div class="nav-actions">
-        <a class="btn ghost" href="#waitlist">Join Pilot</a>
+        <ng-container *ngIf="session$ | async; else guestNav">
+          <a class="btn ghost" routerLink="/app">Open Portal</a>
+        </ng-container>
+        <ng-template #guestNav>
+          <a class="btn ghost" routerLink="/login">Sign in</a>
+        </ng-template>
         <a class="btn primary" href="#demo">Book a Demo</a>
       </div>
 
@@ -30,7 +35,12 @@
         {{ link.label }}
       </a>
       <div class="mobile-actions">
-        <a class="btn block ghost" href="#waitlist" (click)="closeMobileMenu()">Join Pilot</a>
+        <ng-container *ngIf="session$ | async; else guestMobile">
+          <a class="btn block ghost" routerLink="/app" (click)="closeMobileMenu()">Open Portal</a>
+        </ng-container>
+        <ng-template #guestMobile>
+          <a class="btn block ghost" routerLink="/login" (click)="closeMobileMenu()">Sign in</a>
+        </ng-template>
         <a class="btn block primary" href="#demo" (click)="closeMobileMenu()">Book a Demo</a>
       </div>
     </div>
@@ -67,7 +77,12 @@
 
           <div class="cta-row">
             <a class="btn primary" href="#demo">Book a Demo</a>
-            <a class="btn outline" href="#waitlist">Join the Pilot</a>
+            <ng-container *ngIf="session$ | async; else guestHero">
+              <a class="btn outline" routerLink="/app">Go to portal</a>
+            </ng-container>
+            <ng-template #guestHero>
+              <a class="btn outline" routerLink="/login">Access portal</a>
+            </ng-template>
           </div>
 
           <p class="note">
@@ -126,9 +141,13 @@
 
     <section class="section trust">
       <div class="container">
-        <p class="eyebrow">Trusted by teams building on Shopify Plus</p>
+        <p class="eyebrow">Built for headless teams using</p>
         <div class="logo-grid">
-          <span class="logo-pill" *ngFor="let logo of trustLogos">{{ logo }}</span>
+          <span class="logo-pill" *ngFor="let item of compatibilityItems">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" [innerHTML]="item.icon | iconSvg"></svg>
+            {{ item.label }}
+          </span>
         </div>
       </div>
     </section>
@@ -327,23 +346,6 @@
       </div>
     </section>
 
-    <section class="section testimonial">
-      <div class="container">
-        <div class="quote-mark">"</div>
-        <blockquote>
-          We didn't move to headless because we knew we'd lose the visual editor.
-          <span class="gradient-text"> This changes that equation entirely.</span>
-        </blockquote>
-        <div class="quote-meta">
-          <div class="avatar">M</div>
-          <div>
-            <p class="name">Shopify Store Director</p>
-            <p class="muted">Enterprise DTC Brand (Pilot Participant)</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <section class="section">
       <div class="container">
         <div class="section-head">
@@ -399,7 +401,7 @@
           <div class="pill primary">Now accepting pilot partners</div>
           <h2>Ready to bring visual editing back to headless?</h2>
           <p class="lead">
-            Join the pilot program and give your store the autonomy they need —
+            Book a demo to see if the pilot is a fit for your team —
             without sacrificing the performance and flexibility of headless architecture.
           </p>
 
@@ -413,13 +415,10 @@
             </li>
           </ul>
 
-          <div class="callout-box">
-            <p><strong>Early adopter benefit:</strong></p>
-            <p>Pilot partners get priority access, hands-on onboarding, and input into the roadmap.</p>
-          </div>
+          
         </div>
 
-        <div class="final-form" id="waitlist">
+        <div class="final-form">
           <h3>Book your demo</h3>
           <p class="muted">See Kustomizer in action. We'll show you how it works with your stack.</p>
 
@@ -428,8 +427,8 @@
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round" [innerHTML]="'check' | iconSvg"></svg>
             </div>
-            <h4>You're on the list!</h4>
-            <p class="muted">We'll reach out within 24 hours to schedule your demo.</p>
+            <h4>Email draft opened</h4>
+            <p class="muted">Send the email to complete your demo request. We'll reply to schedule.</p>
           </div>
 
           <form *ngIf="formStatus !== 'done'" class="lead-form" (submit)="submitLead($event)">
@@ -472,6 +471,11 @@
             </div>
 
             <label>
+              <span>Preferred time (optional)</span>
+              <input type="datetime-local" name="preferredTime" />
+            </label>
+
+            <label>
               <span>Monthly GMV (optional)</span>
               <select name="gmv">
                 <option value="" selected>Select range</option>
@@ -490,10 +494,14 @@
             </label>
 
             <button class="btn primary block" type="submit" [disabled]="formStatus === 'submitting'">
-              {{ formStatus === 'submitting' ? 'Submitting...' : 'Book a Demo' }}
+              {{ formStatus === 'submitting' ? 'Opening email...' : 'Request a Demo (email)' }}
             </button>
+
+            <a *ngIf="calendlyUrl" class="btn outline block" [href]="calendlyUrl" target="_blank" rel="noopener">
+              Book on Calendly
+            </a>
             <p class="muted center small">
-              By submitting, you agree to receive communications from Kustomizer. We respect your privacy.
+              This will open your email client to send the request. We respect your privacy.
             </p>
           </form>
         </div>
@@ -521,21 +529,19 @@
 
       <div class="footer-col">
         <h4>Company</h4>
-        <a *ngFor="let link of footerLinks.company" [href]="link.href">{{ link.label }}</a>
+        <a *ngFor="let link of footerLinks.company" [routerLink]="link.href">{{ link.label }}</a>
       </div>
 
       <div class="footer-col">
         <h4>Legal</h4>
-        <a *ngFor="let link of footerLinks.legal" [href]="link.href">{{ link.label }}</a>
+        <a *ngFor="let link of footerLinks.legal" [routerLink]="link.href">{{ link.label }}</a>
       </div>
     </div>
 
     <div class="container footer-bottom">
       <p class="muted small">© {{ currentYear }} Kustomizer. All rights reserved.</p>
       <div class="footer-links">
-        <a href="#">Twitter</a>
-        <a href="#">LinkedIn</a>
-        <a href="#">GitHub</a>
+        <a routerLink="/contact">Contact</a>
       </div>
     </div>
   </footer>

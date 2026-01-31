@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize, take } from 'rxjs/operators';
 import { StoreUsersFacade } from '../../../core/facades/store-users.facade';
@@ -312,6 +312,7 @@ export class PortalTeamComponent {
   private readonly storeContext = inject(StoreContextFacade);
   private readonly storeUsersFacade = inject(StoreUsersFacade);
   private readonly fb = inject(FormBuilder);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly vm$ = this.storeUsersFacade.vm$;
   readonly activeStore$ = this.storeContext.getActiveStore();
@@ -341,34 +342,44 @@ export class PortalTeamComponent {
     this.errorMessage = null;
     this.successMessage = null;
 
+    this.cdr.detectChanges();
+
     this.storeUsersFacade
       .inviteUser(email, role)
       .pipe(
         take(1),
-        finalize(() => (this.isSending = false))
+        finalize(() => {
+          this.isSending = false;
+          this.cdr.detectChanges();
+        })
       )
       .subscribe({
         next: () => {
           this.successMessage = 'User added to store.';
           this.inviteForm.reset({ email: '', role: StoreUserRole.Admin });
+          this.cdr.detectChanges();
         },
         error: (error) => {
           this.errorMessage = error.message || 'Failed to send invitation. Please try again.';
+          this.cdr.detectChanges();
         },
       });
   }
 
   removeUser(email: string): void {
     this.errorMessage = null;
+    this.cdr.detectChanges();
     this.storeUsersFacade
       .removeUser(email)
       .pipe(take(1))
       .subscribe({
         next: () => {
           this.successMessage = 'User removed.';
+          this.cdr.detectChanges();
         },
         error: (error) => {
           this.errorMessage = error.message || 'Failed to remove user.';
+          this.cdr.detectChanges();
         },
       });
   }

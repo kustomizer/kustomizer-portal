@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "block-git-add-all",
+      "command": "git",
+      "subcommand": "add",
+      "block_args": ["-A", "--all", ".", "-u", "--update"],
+      "reason": "Avoid blanket staging. Use 'git add <paths>' for atomic commits."
+    },
+    {
+      "name": "block-npm-global-install",
+      "command": "npm",
+      "subcommand": "install",
+      "block_args": ["-g", "--global"],
+      "reason": "Avoid global installs. Prefer npx or project-local dependencies."
+    }
+  ]
+}

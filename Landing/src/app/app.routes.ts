@@ -8,6 +8,18 @@ export const routes: Routes = [
     loadComponent: () => import('./public/landing/landing.component').then((m) => m.LandingComponent),
   },
   {
+    path: 'privacy',
+    loadComponent: () => import('./public/legal/privacy.component').then((m) => m.PrivacyComponent),
+  },
+  {
+    path: 'terms',
+    loadComponent: () => import('./public/legal/terms.component').then((m) => m.TermsComponent),
+  },
+  {
+    path: 'security',
+    loadComponent: () => import('./public/legal/security.component').then((m) => m.SecurityComponent),
+  },
+  {
     path: 'pricing',
     loadComponent: () => import('./public/pricing/pricing.component').then((m) => m.PricingComponent),
   },

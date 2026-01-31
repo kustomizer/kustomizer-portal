@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { finalize, take } from 'rxjs/operators';
+import { EMPTY } from 'rxjs';
+import { catchError, finalize, take } from 'rxjs/operators';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
 import { LicenseFacade } from '../../../core/facades/license.facade';
 import { Tier } from '../../../core/types/enums';
@@ -405,6 +406,7 @@ export class PortalDashboardComponent {
   private readonly storeContextFacade = inject(StoreContextFacade);
   private readonly licenseFacade = inject(LicenseFacade);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly storeContext$ = this.storeContextFacade.vm$;
   readonly licenseVm$ = this.licenseFacade.vm$;
@@ -452,19 +454,27 @@ export class PortalDashboardComponent {
     this.bootstrapping = true;
     this.bootstrapError = null;
 
+    this.cdr.detectChanges();
+
     this.storeContextFacade
       .bootstrapStore(storeName, domain, tier)
       .pipe(
         take(1),
-        finalize(() => (this.bootstrapping = false))
+        catchError((error) => {
+          this.bootstrapError = error instanceof Error ? error.message : 'Failed to create store. Please try again.';
+          this.cdr.detectChanges();
+          return EMPTY;
+        }),
+        finalize(() => {
+          this.bootstrapping = false;
+          this.cdr.detectChanges();
+        })
       )
       .subscribe({
         next: () => {
           // Success - the dashboard will automatically show after bootstrap
           this.onboardingForm.reset({ storeName: '', domain: '', tier: Tier.Starter });
-        },
-        error: (error) => {
-          this.bootstrapError = error.message || 'Failed to create store. Please try again.';
+          this.cdr.detectChanges();
         },
       });
   }

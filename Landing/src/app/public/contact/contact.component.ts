@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { environment } from '../../../environment/environment';
 
 @Component({
   selector: 'app-contact',
@@ -11,5 +12,5 @@ import { RouterLink } from '@angular/router';
 })
 export class ContactComponent {
   readonly currentYear = new Date().getFullYear();
+  readonly contactEmail = environment.publicDemoEmail;
 }
-

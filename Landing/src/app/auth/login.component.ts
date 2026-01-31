@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { finalize } from 'rxjs/operators';
@@ -148,6 +148,7 @@ export class LoginComponent {
   private readonly router = inject(Router);
   private readonly formBuilder = inject(FormBuilder);
   private readonly route = inject(ActivatedRoute);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   loggingIn = false;
   registering = false;
@@ -179,6 +180,7 @@ export class LoginComponent {
       .pipe(
         finalize(() => {
           this.loggingIn = false;
+          this.cdr.detectChanges();
         })
       )
       .subscribe({
@@ -187,6 +189,7 @@ export class LoginComponent {
         },
         error: (error: Error) => {
           this.errorMessage = error instanceof Error ? error.message : 'Unable to login.';
+          this.cdr.detectChanges();
         },
       });
   }
@@ -205,6 +208,7 @@ export class LoginComponent {
       .pipe(
         finalize(() => {
           this.registering = false;
+          this.cdr.detectChanges();
         })
       )
       .subscribe({
@@ -214,9 +218,11 @@ export class LoginComponent {
             return;
           }
           this.infoMessage = 'Check your email to confirm your account before signing in.';
+          this.cdr.detectChanges();
         },
         error: (error: Error) => {
           this.errorMessage = error instanceof Error ? error.message : 'Unable to register.';
+          this.cdr.detectChanges();
         },
       });
   }

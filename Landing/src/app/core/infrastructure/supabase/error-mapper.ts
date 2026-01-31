@@ -17,7 +17,8 @@ export function mapSupabaseErrorToDomainError(error: any): DomainError {
 }
 
 export function mapHttpErrorToDomainError(status: number, body?: any): DomainError {
-  const message = body?.message || body?.error || 'Request failed';
+  const messageFromBody = body?.message || body?.error;
+  const message = messageFromBody || 'Request failed';
   const reason = body?.reason;
 
   switch (status) {
@@ -28,14 +29,14 @@ export function mapHttpErrorToDomainError(status: number, body?: any): DomainErr
     case 404:
       return DomainError.notFound(message);
     case 409:
-      return DomainError.conflict(message, reason);
+      return DomainError.conflict(reason ? `${message} (${reason})` : message, reason);
     case 400:
       return DomainError.validation(message);
     case 422:
       return DomainError.validation(message);
     default:
       if (status >= 500) {
-        return DomainError.unknown('Server error occurred');
+        return DomainError.unknown(messageFromBody || 'Server error occurred');
       }
       return DomainError.unknown(message);
   }
@@ -98,4 +99,3 @@ function mapPostgrestErrorToDomainError(error: any): DomainError {
 
   return DomainError.unknown(message);
 }
-

@@ -105,12 +105,10 @@ if (config.customCSS) &#123;
     </section>
 
     <div class="info-box">
-      <h4>📚 Additional Resources</h4>
-      <ul>
-        <li><a href="#" target="_blank">Full Documentation</a></li>
-        <li><a href="#" target="_blank">Code Examples</a></li>
-        <li><a href="#" target="_blank">Support & FAQ</a></li>
-      </ul>
+      <h4>Additional Resources</h4>
+      <p class="muted">
+        Need help during setup? Reach out via the <a routerLink="/contact">contact page</a>.
+      </p>
     </div>
   `,
   styles: [
@@ -239,15 +237,6 @@ if (config.customCSS) &#123;
       .info-box h4 {
         margin: 0 0 1rem 0;
         color: #3b82f6;
-      }
-
-      .info-box ul {
-        margin: 0;
-        padding-left: 1.5rem;
-      }
-
-      .info-box li {
-        margin-bottom: 0.5rem;
       }
 
       .info-box a {

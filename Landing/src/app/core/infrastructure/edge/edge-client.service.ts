@@ -65,8 +65,15 @@ export class EdgeClientService {
     // FunctionsHttpError: HTTP error from the function (status code available)
     if ('context' in error && typeof error.context === 'object' && error.context !== null && 'status' in error.context) {
       const status = error.context.status as number;
-      const body = this.parseFunctionErrorBody((error.context as { body?: unknown }).body);
-      return mapHttpErrorToDomainError(status, body ?? { message: error.message });
+      const parsedBody = this.parseFunctionErrorBody((error.context as { body?: unknown }).body);
+      const baseMessage = error.message || 'Request failed';
+      const fallbackMessage = `${baseMessage} (HTTP ${status})`;
+      const normalizedBody =
+        parsedBody && (parsedBody.message || parsedBody.error)
+          ? parsedBody
+          : { ...(parsedBody ?? {}), message: fallbackMessage };
+
+      return mapHttpErrorToDomainError(status, normalizedBody);
     }
 
     // FunctionsRelayError: Error from the Edge Functions relay
@@ -74,21 +81,48 @@ export class EdgeClientService {
     return mapHttpErrorToDomainError(500, { message: error.message || 'Edge Function error' });
   }
 
-  private parseFunctionErrorBody(body: unknown): { message?: string; reason?: string } | undefined {
+  private parseFunctionErrorBody(
+    body: unknown
+  ): { message?: string; error?: string; reason?: string } | undefined {
     if (!body) {
       return undefined;
     }
 
+    // Supabase can return Uint8Array bodies for function errors.
+    if (body instanceof Uint8Array) {
+      try {
+        const text = new TextDecoder().decode(body);
+        return this.parseFunctionErrorBody(text);
+      } catch {
+        return undefined;
+      }
+    }
+
+    if (typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer) {
+      try {
+        const text = new TextDecoder().decode(new Uint8Array(body));
+        return this.parseFunctionErrorBody(text);
+      } catch {
+        return undefined;
+      }
+    }
+
     if (typeof body === 'string') {
       try {
-        return JSON.parse(body) as { message?: string; reason?: string };
+        return JSON.parse(body) as { message?: string; error?: string; reason?: string };
       } catch {
         return { message: body };
       }
     }
 
     if (typeof body === 'object') {
-      return body as { message?: string; reason?: string };
+      // Avoid treating streams as "message objects".
+      const maybeStream = body as { getReader?: unknown };
+      if (typeof maybeStream.getReader === 'function') {
+        return undefined;
+      }
+
+      return body as { message?: string; error?: string; reason?: string };
     }
 
     return undefined;

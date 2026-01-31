@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { finalize, take } from 'rxjs/operators';
 import { LicenseFacade } from '../../../core/facades/license.facade';
 import { Tier } from '../../../core/types/enums';
@@ -256,6 +256,7 @@ interface TierOption {
 })
 export class PortalTierComponent {
   private readonly licenseFacade = inject(LicenseFacade);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly licenseVm$ = this.licenseFacade.vm$;
 
@@ -296,6 +297,8 @@ export class PortalTierComponent {
     this.errorMessage = null;
     this.successMessage = null;
 
+    this.cdr.detectChanges();
+
     this.licenseFacade
       .updateTier(tier)
       .pipe(
@@ -303,15 +306,18 @@ export class PortalTierComponent {
         finalize(() => {
           this.isChanging = false;
           this.selectedTier = null;
+          this.cdr.detectChanges();
         })
       )
       .subscribe({
         next: () => {
           this.successMessage = `Successfully changed to ${label} plan!`;
+          this.cdr.detectChanges();
           setTimeout(() => (this.successMessage = null), 5000);
         },
         error: (error) => {
           this.errorMessage = error.message || 'Failed to change tier. Please try again.';
+          this.cdr.detectChanges();
         },
       });
   }
