@@ -7,4 +7,5 @@ export const environment = {
   // NOTE: These are not secrets. They are used to build mailto/calendly links.
   publicDemoEmail: 'kustomizer0@gmail.com',
   publicCalendlyUrl: 'https://calendly.com/kustomizer',
+  publicShopifyInstallUrl: '/api/shopify/install',
 };

@@ -1,88 +1,50 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
-import { EMPTY } from 'rxjs';
-import { catchError, finalize, take } from 'rxjs/operators';
-import { StoreContextFacade } from '../../../core/facades/store-context.facade';
+import { Component, OnInit, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { filter, take } from 'rxjs/operators';
+import { environment } from '../../../../environment/environment';
 import { LicenseFacade } from '../../../core/facades/license.facade';
-import { Tier } from '../../../core/types/enums';
+import { StoreContextFacade } from '../../../core/facades/store-context.facade';
 import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
+import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install';
 
 @Component({
   selector: 'app-portal-dashboard',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, RouterLink],
   template: `
-    <!-- Onboarding Form (shown when no stores exist) -->
     <ng-container *ngIf="storeContext$ | async as ctx">
       <div *ngIf="ctx.state === 'empty' && ctx.data?.needsBootstrap" class="onboarding-card">
         <div class="onboarding-header">
-          <h2>Welcome to Kustomizer!</h2>
-          <p>Let's set up your first store to get started</p>
+          <h2>Connect your Shopify store</h2>
+          <p>
+            Owner onboarding is handled from Shopify. Install Kustomizer there and your store will
+            appear automatically in this portal.
+          </p>
         </div>
 
-        <form [formGroup]="onboardingForm" (ngSubmit)="createStore()" class="onboarding-form">
-          <div class="form-group">
-            <label for="storeName">Store Name</label>
-            <input
-              id="storeName"
-              type="text"
-              formControlName="storeName"
-              placeholder="My Awesome Store"
-              [disabled]="bootstrapping"
-            />
-            <div *ngIf="onboardingForm.get('storeName')?.invalid && onboardingForm.get('storeName')?.touched" class="error-msg">
-              Store name is required
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="domain">Store Domain</label>
-            <input
-              id="domain"
-              type="text"
-              formControlName="domain"
-              placeholder="store.example.com"
-              [disabled]="bootstrapping"
-            />
-            <div *ngIf="onboardingForm.get('domain')?.invalid && onboardingForm.get('domain')?.touched" class="error-msg">
-              Domain is required
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Choose Your Tier</label>
-            <div class="tier-cards">
-              <label
-                *ngFor="let tier of tiers"
-                class="tier-card"
-                [class.selected]="onboardingForm.get('tier')?.value === tier.value"
-              >
-                <input type="radio" formControlName="tier" [value]="tier.value" />
-                <div class="tier-content">
-                  <h4>{{ tier.label }}</h4>
-                  <p class="tier-price">{{ tier.price }}</p>
-                  <ul class="tier-features">
-                    <li *ngFor="let feature of tier.features">{{ feature }}</li>
-                  </ul>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <button type="submit" class="btn-primary" [disabled]="onboardingForm.invalid || bootstrapping">
-            {{ bootstrapping ? 'Creating Store...' : 'Create Store' }}
+        <div class="onboarding-actions">
+          <button
+            type="button"
+            class="btn-primary"
+            (click)="openShopifyInstall()"
+            [disabled]="!shopifyInstallUrl"
+          >
+            Install on Shopify
           </button>
+          <a routerLink="/app/install" class="btn-link">See integration guide</a>
+        </div>
 
-          <div *ngIf="bootstrapError" class="error-msg">
-            {{ bootstrapError }}
-          </div>
-        </form>
+        <p class="hint" *ngIf="!shopifyInstallUrl">
+          Shopify install URL is not configured yet. Contact support.
+        </p>
+
+        <p class="hint">
+          Already invited by an owner? Sign in with that email and your store access will appear.
+        </p>
       </div>
     </ng-container>
 
-    <!-- Dashboard Content (shown after bootstrap) -->
     <div class="grid" *ngIf="!(storeContext$ | async)?.data?.needsBootstrap">
       <section class="card">
         <h3>License overview</h3>
@@ -93,7 +55,14 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
           <div *ngIf="licenseState.state === 'ready' && licenseState.data" class="license">
             <div>
               <p class="label">Status</p>
-              <h2 [class]="getLicenseStatusClass(licenseState.data.license?.active ?? false, licenseState.data.license?.expiresAt)">
+              <h2
+                [class]="
+                  getLicenseStatusClass(
+                    licenseState.data.license?.active ?? false,
+                    licenseState.data.license?.expiresAt
+                  )
+                "
+              >
                 {{ licenseState.data.statusLabel }}
               </h2>
               <p class="sub">{{ licenseState.data.expiresIn }}</p>
@@ -108,40 +77,39 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
       </section>
 
       <section class="card">
-        <h3>Quick Stats</h3>
+        <h3>Quick stats</h3>
         <ng-container *ngIf="storeContext$ | async as storeCtx">
           <div *ngIf="storeCtx.state === 'ready' && storeCtx.data" class="stats">
             <div class="stat">
-              <p class="label">Active Store</p>
+              <p class="label">Active store</p>
               <h3>{{ storeCtx.data.activeStore?.name || 'None' }}</h3>
             </div>
             <div class="stat">
-              <p class="label">Total Stores</p>
+              <p class="label">Total stores</p>
               <h3>{{ storeCtx.data.stores.length }}</h3>
             </div>
           </div>
         </ng-container>
-        
       </section>
 
       <section class="card">
-        <h3>Quick Actions</h3>
+        <h3>Quick actions</h3>
         <div class="actions">
           <a routerLink="/app/stores" class="action-btn">
-            <span>Manage Stores</span>
-            <span class="arrow">→</span>
+            <span>Manage stores</span>
+            <span class="arrow">-></span>
           </a>
           <a routerLink="/app/team" class="action-btn">
-            <span>Invite Team Members</span>
-            <span class="arrow">→</span>
+            <span>Invite team members</span>
+            <span class="arrow">-></span>
           </a>
           <a routerLink="/app/tier" class="action-btn">
-            <span>Upgrade Plan</span>
-            <span class="arrow">→</span>
+            <span>Upgrade plan</span>
+            <span class="arrow">-></span>
           </a>
           <a routerLink="/app/install" class="action-btn">
-            <span>Installation Guide</span>
-            <span class="arrow">→</span>
+            <span>Installation guide</span>
+            <span class="arrow">-></span>
           </a>
         </div>
       </section>
@@ -153,92 +121,54 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 24px;
-        padding: 3rem 2rem;
-        max-width: 900px;
+        padding: 2.5rem 2rem;
+        max-width: 760px;
         margin: 0 auto 2rem;
         box-shadow: var(--shadow-soft);
       }
 
       .onboarding-header {
-        text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
       }
 
       .onboarding-header h2 {
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.6rem;
       }
 
-      .onboarding-header p {
+      .onboarding-header p,
+      .hint {
         color: var(--muted);
+        margin: 0;
       }
 
-      .onboarding-form {
+      .onboarding-actions {
         display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-      }
-
-      .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-
-      .form-group label {
-        font-weight: 600;
-        font-size: 0.9rem;
-      }
-
-      .tier-cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1rem;
-      }
-
-      .tier-card {
-        position: relative;
-        padding: 1.5rem;
-        border: 2px solid var(--border);
-        border-radius: 16px;
-        cursor: pointer;
-        transition: all 0.2s;
-        background: var(--card-soft);
-      }
-
-      .tier-card:hover {
-        border-color: var(--primary);
-      }
-
-      .tier-card.selected {
-        border-color: var(--primary);
-        background: rgba(var(--primary-rgb), 0.1);
-      }
-
-      .tier-card input[type='radio'] {
-        position: absolute;
-        opacity: 0;
-      }
-
-      .tier-content h4 {
-        margin: 0 0 0.5rem 0;
-      }
-
-      .tier-price {
-        color: var(--primary);
-        font-weight: 600;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.8rem;
         margin-bottom: 1rem;
       }
 
-      .tier-features {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        font-size: 0.85rem;
-        color: var(--muted);
+      .btn-primary {
+        padding: 0.85rem 1.4rem;
+        border-radius: 12px;
+        border: none;
+        background: var(--primary);
+        color: #0a0d10;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: opacity 0.2s;
       }
 
-      .tier-features li {
-        padding: 0.25rem 0;
+      .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-link {
+        color: var(--primary);
+        font-weight: 600;
       }
 
       .grid {
@@ -326,157 +256,44 @@ import { getLicenseStatusClass } from '../../../shared/utils/enum-labels';
 
       .action-btn .arrow {
         color: var(--primary);
-        font-size: 1.2rem;
-      }
-
-      input,
-      select {
-        width: 100%;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        background: transparent;
-        padding: 0.75rem 1rem;
-        color: var(--foreground);
         font-size: 1rem;
-      }
-
-      input:focus,
-      select:focus {
-        outline: none;
-        border-color: var(--primary);
-      }
-
-      .btn-primary {
-        width: 100%;
-        padding: 1rem;
-        border-radius: 12px;
-        border: none;
-        background: var(--primary);
-        color: #0a0d10;
-        font-weight: 600;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: opacity 0.2s;
-      }
-
-      .btn-primary:hover:not(:disabled) {
-        opacity: 0.9;
-      }
-
-      .btn-primary:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      .error-msg {
-        color: var(--danger);
-        font-size: 0.85rem;
-        margin-top: 0.25rem;
-      }
-
-      .status-trial {
-        color: #fbbf24;
-      }
-
-      .status-active {
-        color: #10b981;
-      }
-
-      .status-expired {
-        color: #ef4444;
-      }
-
-      .status-warning {
-        color: #f59e0b;
-      }
-
-      @media (max-width: 720px) {
-        .onboarding-card {
-          padding: 2rem 1.5rem;
-        }
-
-        .tier-cards {
-          grid-template-columns: 1fr;
-        }
       }
     `,
   ],
 })
-export class PortalDashboardComponent {
+export class PortalDashboardComponent implements OnInit {
   private readonly storeContextFacade = inject(StoreContextFacade);
   private readonly licenseFacade = inject(LicenseFacade);
-  private readonly formBuilder = inject(FormBuilder);
-  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly route = inject(ActivatedRoute);
 
   readonly storeContext$ = this.storeContextFacade.vm$;
   readonly licenseVm$ = this.licenseFacade.vm$;
+  readonly shopifyInstallUrl = resolveShopifyInstallUrl(environment.publicShopifyInstallUrl);
 
-  bootstrapping = false;
-  bootstrapError: string | null = null;
-
-  readonly tiers = [
-    {
-      value: Tier.Starter,
-      label: 'Starter',
-      price: '$29/mo',
-      features: ['Single store', 'Core editor features', 'Email support'],
-    },
-    {
-      value: Tier.Growth,
-      label: 'Growth',
-      price: '$99/mo',
-      features: ['Multiple stores', 'Advanced editor features', 'Priority support'],
-    },
-    {
-      value: Tier.Enterprise,
-      label: 'Enterprise',
-      price: 'Custom',
-      features: [
-        'Unlimited stores',
-        'Dedicated support',
-        'Custom integrations',
-      ],
-    },
-  ];
-
-  readonly onboardingForm = this.formBuilder.nonNullable.group({
-    storeName: ['', [Validators.required, Validators.minLength(2)]],
-    domain: ['', [Validators.required, Validators.minLength(3)]],
-    tier: [Tier.Starter, Validators.required],
-  });
-
-  createStore(): void {
-    if (this.onboardingForm.invalid) {
+  ngOnInit(): void {
+    const shouldRedirectToShopify = this.route.snapshot.queryParamMap.get('onboarding') === 'shopify';
+    if (!shouldRedirectToShopify || !this.shopifyInstallUrl) {
       return;
     }
 
-    const { storeName, domain, tier } = this.onboardingForm.getRawValue();
-    this.bootstrapping = true;
-    this.bootstrapError = null;
-
-    this.cdr.detectChanges();
-
-    this.storeContextFacade
-      .bootstrapStore(storeName, domain, tier)
+    this.storeContext$
       .pipe(
-        take(1),
-        catchError((error) => {
-          this.bootstrapError = error instanceof Error ? error.message : 'Failed to create store. Please try again.';
-          this.cdr.detectChanges();
-          return EMPTY;
-        }),
-        finalize(() => {
-          this.bootstrapping = false;
-          this.cdr.detectChanges();
-        })
+        filter((state) => state.state !== 'loading'),
+        take(1)
       )
-      .subscribe({
-        next: () => {
-          // Success - the dashboard will automatically show after bootstrap
-          this.onboardingForm.reset({ storeName: '', domain: '', tier: Tier.Starter });
-          this.cdr.detectChanges();
-        },
+      .subscribe((state) => {
+        if (state.state === 'empty' && state.data?.needsBootstrap) {
+          this.openShopifyInstall();
+        }
       });
+  }
+
+  openShopifyInstall(): void {
+    if (!this.shopifyInstallUrl || typeof window === 'undefined') {
+      return;
+    }
+
+    window.location.assign(this.shopifyInstallUrl);
   }
 
   getLicenseStatusClass(active: boolean, expiresAt?: string | null): string {

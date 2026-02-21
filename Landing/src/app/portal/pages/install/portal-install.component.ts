@@ -36,7 +36,6 @@ import { RouterLink } from '@angular/router';
         <pre><code>import &#123; KustomizerClient &#125; from '@kustomizer/client';
 
 const kustomizer = new KustomizerClient(&#123;
-  domain: 'your-store-domain.com',
   domain: window.location.hostname
 &#125;);
 

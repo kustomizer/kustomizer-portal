@@ -5,6 +5,7 @@ import {
   getUser,
   jsonResponse,
 } from '../_shared/edge.ts';
+import { normalizeDomainInput, normalizeShopifyDomainInput } from '../_shared/store-access.ts';
 
 type OwnerShopifyCredentialsUpsertRequest = {
   domain?: string;
@@ -123,11 +124,12 @@ Deno.serve(async (req) => {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const domain = payload.domain?.trim();
-  const shopifyDomain = (payload.shopify_domain ?? payload.shop)?.trim();
+  const domain = payload.domain ? normalizeDomainInput(payload.domain) : '';
+  const shopifyDomain = payload.shopify_domain ?? payload.shop;
+  const normalizedShopifyDomain = shopifyDomain ? normalizeShopifyDomainInput(shopifyDomain) : '';
   const accessToken = (payload.access_token ?? payload.accessToken)?.trim();
 
-  if (!domain || !shopifyDomain || !accessToken) {
+  if (!domain || !normalizedShopifyDomain || !accessToken) {
     return errorResponse(
       422,
       'domain, shopify_domain (or shop), and access_token (or accessToken) are required'
@@ -156,12 +158,12 @@ Deno.serve(async (req) => {
   }
 
   // Verify credentials against Shopify and extract a canonical domain if available.
-  const credentialCheck = await validateCredentials(shopifyDomain, accessToken);
+  const credentialCheck = await validateCredentials(normalizedShopifyDomain, accessToken);
   if (!credentialCheck.ok) {
     return errorResponse(422, 'Invalid Shopify credentials');
   }
 
-  const canonicalShopifyDomain = shopifyDomain;
+  const canonicalShopifyDomain = normalizedShopifyDomain;
 
   let encrypted;
   try {

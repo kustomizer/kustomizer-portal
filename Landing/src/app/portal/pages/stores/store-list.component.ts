@@ -1,80 +1,50 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { EMPTY } from 'rxjs';
-import { finalize, take, switchMap, map, catchError } from 'rxjs/operators';
+import { environment } from '../../../../environment/environment';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
-import { LicenseFacade } from '../../../core/facades/license.facade';
-import { Tier } from '../../../core/types/enums';
+import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install';
 
 @Component({
   selector: 'app-store-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, ReactiveFormsModule],
+  imports: [CommonModule, RouterLink],
   template: `
     <div class="header">
       <div>
         <h2>Stores</h2>
-        <p>Manage your stores and view details.</p>
+        <p>Owner stores are created from Shopify installation.</p>
       </div>
     </div>
-
-    <section class="card create-store">
-      <h3>Create New Store</h3>
-      <form [formGroup]="createForm" (ngSubmit)="createStore()" class="create-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="storeName">Store Name</label>
-            <input
-              id="storeName"
-              type="text"
-              formControlName="storeName"
-              placeholder="My New Store"
-              [disabled]="isCreating"
-            />
-            <div *ngIf="createForm.get('storeName')?.invalid && createForm.get('storeName')?.touched" class="error-msg">
-              Store name is required
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="domain">Store Domain</label>
-            <input
-              id="domain"
-              type="text"
-              formControlName="domain"
-              placeholder="store.example.com"
-              [disabled]="isCreating"
-            />
-            <div *ngIf="createForm.get('domain')?.invalid && createForm.get('domain')?.touched" class="error-msg">
-              Domain is required
-            </div>
-          </div>
-
-          <div class="form-group" *ngIf="!(hasLicense$ | async)">
-            <label for="tier">Plan (first store)</label>
-            <select id="tier" formControlName="tier" [disabled]="isCreating">
-              <option [value]="Tier.Starter">Starter</option>
-              <option [value]="Tier.Growth">Growth</option>
-              <option [value]="Tier.Enterprise">Enterprise</option>
-            </select>
-          </div>
-        </div>
-
-        <button type="submit" class="btn-primary" [disabled]="createForm.invalid || isCreating">
-          {{ isCreating ? 'Creating...' : 'Create Store' }}
-        </button>
-
-        <div *ngIf="createError" class="error-msg">{{ createError }}</div>
-        <div *ngIf="createSuccess" class="success-msg">{{ createSuccess }}</div>
-      </form>
-    </section>
 
     <ng-container *ngIf="vm$ | async as vm">
       <div *ngIf="vm.state === 'loading'" class="state">Loading stores...</div>
       <div *ngIf="vm.state === 'error'" class="state error">{{ vm.error }}</div>
-      <div *ngIf="vm.state === 'empty'" class="state">No stores found. Create one above.</div>
+
+      <section *ngIf="vm.state === 'empty'" class="card empty-state">
+        <h3>No stores connected yet</h3>
+        <p>
+          Install Kustomizer in Shopify to create your owner store. Once installed, your store will
+          appear here automatically.
+        </p>
+
+        <div class="empty-actions">
+          <button
+            type="button"
+            class="btn-primary"
+            (click)="openShopifyInstall()"
+            [disabled]="!shopifyInstallUrl"
+          >
+            Install on Shopify
+          </button>
+          <a routerLink="/app/install" class="btn-link">See integration guide</a>
+        </div>
+
+        <p class="muted" *ngIf="!shopifyInstallUrl">
+          Shopify install URL is not configured yet. Contact support.
+        </p>
+      </section>
+
       <div *ngIf="vm.state === 'ready' && vm.data" class="grid">
         <div
           class="card"
@@ -96,9 +66,9 @@ import { Tier } from '../../../core/types/enums';
               (click)="setActiveStore(store.id)"
               [disabled]="store.id === vm.data.activeStore?.id"
             >
-              {{ store.id === vm.data.activeStore?.id ? 'Current Active Store' : 'Set Active' }}
+              {{ store.id === vm.data.activeStore?.id ? 'Current active store' : 'Set active' }}
             </button>
-            <a [routerLink]="['/app/stores', store.id]" class="btn-link">View Details →</a>
+            <a [routerLink]="['/app/stores', store.id]" class="btn-link">View details -></a>
           </div>
         </div>
       </div>
@@ -110,52 +80,30 @@ import { Tier } from '../../../core/types/enums';
         margin-bottom: 1.5rem;
       }
 
-      .create-store {
+      .state {
+        color: var(--muted);
+        padding: 2rem 0;
+        text-align: center;
+      }
+
+      .state.error {
+        color: var(--danger);
+      }
+
+      .empty-state {
         margin-bottom: 1.5rem;
       }
 
-      .create-form {
-        display: grid;
-        gap: 1rem;
+      .empty-state p {
+        color: var(--muted);
       }
 
-      .form-row {
-        display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      }
-
-      .form-group {
+      .empty-actions {
         display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-
-      .form-group label {
-        font-size: 0.9rem;
-        font-weight: 600;
-      }
-
-      input,
-      select {
-        padding: 0.75rem 1rem;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        background: transparent;
-        color: var(--foreground);
-        font-size: 1rem;
-      }
-
-      input:focus,
-      select:focus {
-        outline: none;
-        border-color: var(--primary);
-      }
-
-      input:disabled,
-      select:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 1rem;
       }
 
       .btn-primary {
@@ -168,36 +116,11 @@ import { Tier } from '../../../core/types/enums';
         font-size: 1rem;
         cursor: pointer;
         transition: all 0.2s;
-        justify-self: start;
-      }
-
-      .btn-primary:hover:not(:disabled) {
-        opacity: 0.9;
       }
 
       .btn-primary:disabled {
         opacity: 0.5;
         cursor: not-allowed;
-      }
-
-      .error-msg {
-        color: var(--danger);
-        font-size: 0.85rem;
-      }
-
-      .success-msg {
-        color: #10b981;
-        font-size: 0.85rem;
-      }
-
-      .state {
-        color: var(--muted);
-        padding: 2rem 0;
-        text-align: center;
-      }
-
-      .state.error {
-        color: var(--danger);
       }
 
       .grid {
@@ -298,67 +221,19 @@ import { Tier } from '../../../core/types/enums';
 })
 export class StoreListComponent {
   private readonly storeContext = inject(StoreContextFacade);
-  private readonly licenseFacade = inject(LicenseFacade);
-  private readonly fb = inject(FormBuilder);
-  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly vm$ = this.storeContext.vm$;
-  readonly Tier = Tier;
-  readonly hasLicense$ = this.licenseFacade.vm$.pipe(
-    map((vm) => vm.state === 'ready' && !!vm.data?.license)
-  );
-
-  isCreating = false;
-  createError: string | null = null;
-  createSuccess: string | null = null;
-
-  readonly createForm = this.fb.nonNullable.group({
-    storeName: ['', [Validators.required]],
-    domain: ['', [Validators.required]],
-    tier: [Tier.Starter, [Validators.required]],
-  });
-
-  createStore(): void {
-    if (this.createForm.invalid) {
-      return;
-    }
-
-    const { storeName, domain, tier } = this.createForm.getRawValue();
-    this.isCreating = true;
-    this.createError = null;
-    this.createSuccess = null;
-
-    this.licenseFacade.vm$
-      .pipe(
-        take(1),
-        switchMap((licenseVm) => {
-          const resolvedTier =
-            licenseVm.state === 'ready' && licenseVm.data?.license
-              ? licenseVm.data.license.tier
-              : tier;
-          return this.storeContext.bootstrapStore(storeName, domain, resolvedTier);
-        }),
-        catchError((error) => {
-          this.createError = error instanceof Error ? error.message : 'Failed to create store. Please try again.';
-          this.cdr.detectChanges();
-          return EMPTY;
-        }),
-        finalize(() => {
-          this.isCreating = false;
-          this.cdr.detectChanges();
-        })
-      )
-      .subscribe({
-        next: () => {
-          this.createSuccess = 'Store created successfully.';
-          this.createForm.reset({ storeName: '', domain: '', tier: Tier.Starter });
-          this.cdr.detectChanges();
-          setTimeout(() => (this.createSuccess = null), 3000);
-        },
-      });
-  }
+  readonly shopifyInstallUrl = resolveShopifyInstallUrl(environment.publicShopifyInstallUrl);
 
   setActiveStore(storeId: string): void {
     this.storeContext.setActiveStore(storeId);
+  }
+
+  openShopifyInstall(): void {
+    if (!this.shopifyInstallUrl || typeof window === 'undefined') {
+      return;
+    }
+
+    window.location.assign(this.shopifyInstallUrl);
   }
 }

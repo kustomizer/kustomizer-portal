@@ -1,30 +1,5 @@
-import 'reflect-metadata';
-import {
-  AngularNodeAppEngine,
-  createNodeRequestHandler,
-  isMainModule,
-  writeResponseToNodeResponse,
-} from '@angular/ssr/node';
-import crypto from 'node:crypto';
-import express from 'express';
-import { join } from 'node:path';
-
-const browserDistFolder = join(import.meta.dirname, '../browser');
-
 const DEFAULT_SHOPIFY_INSTALL_FALLBACK_URL =
   'https://admin.shopify.com/?organization_id=185071352&no_redirect=true&redirect=/oauth/redirect_from_developer_dashboard?client_id%3D95606a5f4f3c52b279cca5d8e090d1eb';
-
-function getQueryStringValue(value: unknown): string | null {
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (Array.isArray(value) && typeof value[0] === 'string') {
-    return value[0];
-  }
-
-  return null;
-}
 
 function normalizeShopDomain(raw: string): string | null {
   let normalized = raw.trim().toLowerCase();
@@ -89,13 +64,18 @@ function buildOAuthInstallUrl(
   return url.toString();
 }
 
-const app = express();
-const angularApp = new AngularNodeAppEngine();
+function randomState(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
 
-app.get('/api/shopify/install', (req, res) => {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+export default function handler(req: any, res: any): void {
   const fallbackInstallUrl = getFallbackInstallUrl();
+  const rawShop = typeof req.query?.shop === 'string' ? req.query.shop : null;
 
-  const rawShop = getQueryStringValue(req.query['shop']);
   if (!rawShop) {
     res.redirect(302, fallbackInstallUrl);
     return;
@@ -113,44 +93,11 @@ app.get('/api/shopify/install', (req, res) => {
     return;
   }
 
-  const state = crypto.randomUUID();
-  res.cookie('shopify_oauth_state', state, {
-    httpOnly: true,
-    secure: process.env['NODE_ENV'] === 'production',
-    sameSite: 'lax',
-    maxAge: 10 * 60 * 1000,
-    path: '/',
-  });
+  const state = randomState();
+  res.setHeader(
+    'Set-Cookie',
+    `shopify_oauth_state=${state}; Max-Age=600; Path=/; HttpOnly; SameSite=Lax; Secure`
+  );
 
   res.redirect(302, buildOAuthInstallUrl(shop, oauthConfig, state));
-});
-
-app.use(
-  express.static(browserDistFolder, {
-    maxAge: '1y',
-    index: false,
-    redirect: false,
-  }),
-);
-
-app.use((req, res, next) => {
-  angularApp
-    .handle(req)
-    .then((response) =>
-      response ? writeResponseToNodeResponse(response, res) : next(),
-    )
-    .catch(next);
-});
-
-if (isMainModule(import.meta.url) || process.env['pm_id']) {
-  const port = process.env['PORT'] || 4000;
-  app.listen(port, (error) => {
-    if (error) {
-      throw error;
-    }
-
-    console.log(`Node Express server listening on http://localhost:${port}`);
-  });
 }
-
-export const reqHandler = createNodeRequestHandler(app);

@@ -4,6 +4,7 @@ import {
   getServiceClient,
   jsonResponse,
 } from '../_shared/edge.ts';
+import { normalizeShopifyDomainInput, resolveStoreMembership } from '../_shared/store-access.ts';
 
 type KustomizerShopifyMetaobjectGetRequest = {
   domain?: string;
@@ -111,17 +112,13 @@ Deno.serve(async (req) => {
 
   const supabaseAdmin = getServiceClient();
 
-  // Validate membership + license (same idea as kustomizer_auth)
-  const { data: storeUser, error: storeUserError } = await supabaseAdmin
-    .from('store_users')
-    .select('domain, email, invited_by, role, status')
-    .eq('domain', domain)
-    .eq('email', email)
-    .maybeSingle();
+  const resolvedMembership = await resolveStoreMembership(supabaseAdmin, domain, email);
 
-  if (storeUserError || !storeUser) {
+  if (!resolvedMembership) {
     return errorResponse(404, 'Store user not found');
   }
+
+  const { storeUser, canonicalDomain, shopifyDomain: resolvedShopifyDomain } = resolvedMembership;
 
   if (storeUser.status !== 'active') {
     return errorResponse(403, 'User is not active');
@@ -154,13 +151,27 @@ Deno.serve(async (req) => {
     return errorResponse(403, 'License expired');
   }
 
-  const { data: creds, error: credsError } = await supabaseAdmin
+  const { data: credsByDomain, error: credsByDomainError } = await supabaseAdmin
     .from('store_shopify_credentials')
     .select('shopify_domain, access_token_ciphertext, access_token_iv')
-    .eq('domain', domain)
+    .eq('domain', canonicalDomain)
     .maybeSingle();
 
-  if (credsError || !creds) {
+  let creds = credsByDomain;
+
+  if (!creds && !credsByDomainError) {
+    const fallbackShopifyDomain = normalizeShopifyDomainInput(resolvedShopifyDomain ?? domain);
+
+    const { data: credsByShopify } = await supabaseAdmin
+      .from('store_shopify_credentials')
+      .select('shopify_domain, access_token_ciphertext, access_token_iv')
+      .eq('shopify_domain', fallbackShopifyDomain)
+      .maybeSingle();
+
+    creds = credsByShopify;
+  }
+
+  if (!creds) {
     return errorResponse(404, 'Shopify credentials not found');
   }
 

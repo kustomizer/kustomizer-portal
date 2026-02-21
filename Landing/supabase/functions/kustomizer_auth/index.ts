@@ -4,6 +4,7 @@ import {
   getServiceClient,
   jsonResponse,
 } from '../_shared/edge.ts';
+import { resolveStoreMembership } from '../_shared/store-access.ts';
 
 type KustomizerAuthRequest = {
   domain?: string;
@@ -35,16 +36,13 @@ Deno.serve(async (req) => {
 
   const supabaseAdmin = getServiceClient();
 
-  const { data: storeUser, error: storeUserError } = await supabaseAdmin
-    .from('store_users')
-    .select('domain, email, invited_by, role, status')
-    .eq('domain', domain)
-    .eq('email', email)
-    .maybeSingle();
+  const resolvedMembership = await resolveStoreMembership(supabaseAdmin, domain, email);
 
-  if (storeUserError || !storeUser) {
+  if (!resolvedMembership) {
     return errorResponse(404, 'Store user not found');
   }
+
+  const { storeUser } = resolvedMembership;
 
   if (storeUser.status !== 'active') {
     return errorResponse(403, 'User is not active');

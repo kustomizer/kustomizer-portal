@@ -43,7 +43,7 @@ import { AuthFacade } from '../core/facades/auth.facade';
             <input type="password" formControlName="password" placeholder="Minimum 8 characters" />
           </div>
           <button type="submit" [disabled]="registerForm.invalid || registering">
-            {{ registering ? 'Creating...' : 'Create workspace' }}
+            {{ registering ? 'Creating...' : 'Create account' }}
           </button>
         </form>
 
@@ -214,7 +214,9 @@ export class LoginComponent {
       .subscribe({
         next: (session) => {
           if (session) {
-            void this.router.navigate([this.resolveRedirectTarget()]);
+            void this.router.navigate(['/app/dashboard'], {
+              queryParams: { onboarding: 'shopify' },
+            });
             return;
           }
           this.infoMessage = 'Check your email to confirm your account before signing in.';
