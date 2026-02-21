@@ -65,11 +65,19 @@ function buildOAuthInstallUrl(
 }
 
 function randomState(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-
   return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function redirect(res: any, location: string): void {
+  res.statusCode = 302;
+  res.setHeader('Location', location);
+  res.end();
+}
+
+function json(res: any, statusCode: number, payload: Record<string, unknown>): void {
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(payload));
 }
 
 export default function handler(req: any, res: any): void {
@@ -77,19 +85,19 @@ export default function handler(req: any, res: any): void {
   const rawShop = typeof req.query?.shop === 'string' ? req.query.shop : null;
 
   if (!rawShop) {
-    res.redirect(302, fallbackInstallUrl);
+    redirect(res, fallbackInstallUrl);
     return;
   }
 
   const shop = normalizeShopDomain(rawShop);
   if (!shop) {
-    res.status(400).json({ message: 'Invalid shop parameter' });
+    json(res, 400, { message: 'Invalid shop parameter' });
     return;
   }
 
   const oauthConfig = getOAuthInstallConfig();
   if (!oauthConfig) {
-    res.redirect(302, fallbackInstallUrl);
+    redirect(res, fallbackInstallUrl);
     return;
   }
 
@@ -99,5 +107,5 @@ export default function handler(req: any, res: any): void {
     `shopify_oauth_state=${state}; Max-Age=600; Path=/; HttpOnly; SameSite=Lax; Secure`
   );
 
-  res.redirect(302, buildOAuthInstallUrl(shop, oauthConfig, state));
+  redirect(res, buildOAuthInstallUrl(shop, oauthConfig, state));
 }
