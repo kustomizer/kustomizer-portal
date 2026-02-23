@@ -36,6 +36,7 @@ This spec defines owner onboarding and multidomain behavior for the client porta
 ### Store Connection State in Portal
 
 - Store list/detail views expose Shopify connection state (`Connected`/`Disconnected`) from canonical credentials table presence.
+- Connection state is fetched via `POST owner_store_connections_get` (owner/member scoped) so client code does not query `store_shopify_credentials` directly.
 - Disconnected stores provide explicit actions to `Reconnect on Shopify` and `Refresh linked stores` without deleting store ownership records.
 
 ## Team Membership

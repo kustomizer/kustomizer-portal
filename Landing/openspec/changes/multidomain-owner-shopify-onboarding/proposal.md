@@ -66,6 +66,7 @@ Out of scope:
 
 - Add a Shopify uninstall webhook endpoint that verifies `X-Shopify-Hmac-Sha256` and revokes encrypted Shopify credentials for the uninstalled shop.
 - Keep store ownership records visible in portal after uninstall, but mark connection as disconnected and offer reconnect/sync actions.
+- Resolve connection-status rendering through an owner-scoped Edge endpoint (instead of direct credential-table reads from browser clients).
 
 ## Risks and Mitigations
 

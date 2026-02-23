@@ -9,9 +9,12 @@ import { mapSupabaseErrorToDomainError } from './error-mapper';
 type StoreCredentialRow = {
   domain: string;
   shopify_domain?: string | null;
-  access_token_ciphertext?: string | null;
-  access_token_iv?: string | null;
+  connected?: boolean;
   last_validated_at?: string | null;
+};
+
+type OwnerStoreConnectionsResponse = {
+  connections?: StoreCredentialRow[];
 };
 
 type StoreRow = {
@@ -171,35 +174,36 @@ export class SupabaseStoresRepository implements StoresRepository {
     const domains = [...new Set(stores.map((store) => store.domain))];
 
     return from(
-      this.supabaseClient.client
-        .from('store_shopify_credentials')
-        .select('domain, shopify_domain, access_token_ciphertext, access_token_iv, last_validated_at')
-        .in('domain', domains)
+      this.supabaseClient.client.functions.invoke<OwnerStoreConnectionsResponse>(
+        'owner_store_connections_get',
+        {
+          body: { domains },
+        }
+      )
     ).pipe(
       map(({ data, error }) => {
         if (error) {
-          throw mapSupabaseErrorToDomainError(error);
+          // Do not block stores page when connection status lookup fails.
+          return stores;
         }
 
         const credentialsByDomain = new Map<string, StoreCredentialRow>();
-        for (const row of (data || []) as StoreCredentialRow[]) {
+        for (const row of (data?.connections || []) as StoreCredentialRow[]) {
           credentialsByDomain.set(row.domain, row);
         }
 
         return stores.map((store) => this.applyCredentialState(store, credentialsByDomain.get(store.domain)));
-      })
+      }),
+      catchError(() => of(stores))
     );
   }
 
   private applyCredentialState(store: Store, credentials?: StoreCredentialRow): Store {
-    const hasCiphertext =
-      typeof credentials?.access_token_ciphertext === 'string' &&
-      credentials.access_token_ciphertext.length > 0;
-    const hasIv = typeof credentials?.access_token_iv === 'string' && credentials.access_token_iv.length > 0;
+    const connected = credentials?.connected === true;
 
     return {
       ...store,
-      shopifyConnected: hasCiphertext && hasIv,
+      shopifyConnected: connected,
       shopifyDomain: credentials?.shopify_domain ?? null,
       shopifyLastValidatedAt: credentials?.last_validated_at ?? null,
     };

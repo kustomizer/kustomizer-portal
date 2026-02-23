@@ -7,6 +7,7 @@
 - [x] Update register/portal empty-state UX to route owner onboarding through Shopify instead of manual store creation.
 - [x] Remove manual create-store forms from dashboard/store list UI.
 - [x] Add connected/disconnected store status in portal store views, with reconnect and refresh actions for disconnected stores.
+- [x] Add owner-only connection status edge endpoint to avoid direct client access to `store_shopify_credentials`.
 - [x] Implement multidomain resolution in `kustomizer_auth` using legacy domain mappings.
 - [x] Implement multidomain resolution in `kustomizer_shopify_metaobject_get` and `kustomizer_shopify_metaobject_upsert`.
 - [x] Keep canonical-domain checks for membership and license validation.
