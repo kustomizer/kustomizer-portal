@@ -4,7 +4,8 @@ import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 import { environment } from '../../../../environment/environment';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
-import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install';
+import { Store } from '../../../core/models';
+import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install';
 
 @Component({
   selector: 'app-store-list',
@@ -65,10 +66,16 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
         >
           <div class="store-header">
             <h3>{{ store.name }}</h3>
-            <span class="badge" *ngIf="store.id === vm.data.activeStore?.id">Active</span>
+            <div class="badges">
+              <span class="badge" *ngIf="store.id === vm.data.activeStore?.id">Active</span>
+              <span class="badge status" [class.connected]="store.shopifyConnected">
+                {{ store.shopifyConnected ? 'Connected' : 'Disconnected' }}
+              </span>
+            </div>
           </div>
           <div class="meta">
             <p class="muted">{{ store.domain }}</p>
+            <p class="muted" *ngIf="store.shopifyDomain">Shopify: {{ store.shopifyDomain }}</p>
             <p class="muted">Created {{ store.createdAt | date: 'mediumDate' }}</p>
           </div>
           <div class="actions">
@@ -81,6 +88,20 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
               {{ store.id === vm.data.activeStore?.id ? 'Current active store' : 'Set active' }}
             </button>
             <a [routerLink]="['/app/stores', store.id]" class="btn-link">View details -></a>
+          </div>
+
+          <div class="reconnect-actions" *ngIf="!store.shopifyConnected">
+            <button
+              type="button"
+              class="btn-secondary"
+              (click)="reconnectStore(store)"
+              [disabled]="!shopifyInstallUrl || syncingStores"
+            >
+              Reconnect on Shopify
+            </button>
+            <button type="button" class="btn-secondary" (click)="syncLinkedStores()" [disabled]="syncingStores">
+              {{ syncingStores ? 'Refreshing...' : 'Refresh linked stores' }}
+            </button>
           </div>
         </div>
       </div>
@@ -185,6 +206,13 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
         gap: 1rem;
       }
 
+      .badges {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
       .store-header h3 {
         margin: 0;
       }
@@ -199,6 +227,16 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
         text-transform: uppercase;
       }
 
+      .badge.status {
+        background: rgba(var(--danger-rgb, 239, 68, 68), 0.15);
+        color: var(--danger);
+      }
+
+      .badge.status.connected {
+        background: rgba(16, 185, 129, 0.15);
+        color: #10b981;
+      }
+
       .meta {
         display: flex;
         flex-direction: column;
@@ -210,6 +248,12 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
         align-items: center;
         gap: 0.75rem;
         margin-top: 0.5rem;
+      }
+
+      .reconnect-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
       }
 
       .btn-secondary {
@@ -273,7 +317,25 @@ export class StoreListComponent {
       return;
     }
 
-    window.location.assign(this.shopifyInstallUrl);
+    const url = buildShopifyInstallUrl(this.shopifyInstallUrl, null);
+    if (!url) {
+      return;
+    }
+
+    window.location.assign(url);
+  }
+
+  reconnectStore(store: Store): void {
+    if (!this.shopifyInstallUrl || typeof window === 'undefined') {
+      return;
+    }
+
+    const url = buildShopifyInstallUrl(this.shopifyInstallUrl, store.shopifyDomain ?? store.domain);
+    if (!url) {
+      return;
+    }
+
+    window.location.assign(url);
   }
 
   syncLinkedStores(): void {

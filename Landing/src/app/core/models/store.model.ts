@@ -9,6 +9,9 @@ export interface Store {
   name: string;
   ownerEmail: UserEmail;
   createdAt?: string;
+  shopifyConnected?: boolean;
+  shopifyDomain?: string | null;
+  shopifyLastValidatedAt?: string | null;
 }
 
 export interface StoreMetadata {

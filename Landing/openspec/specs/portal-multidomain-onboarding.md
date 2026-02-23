@@ -20,18 +20,23 @@ This spec defines owner onboarding and multidomain behavior for the client porta
 
 - `POST sync_owner_stores_from_legacy` imports owner-linked stores for the authenticated email from legacy sources (`v_legacy_store_users`, `shops`) into canonical portal tables (`stores`, `store_users`).
 - Dashboard and stores empty-state include a "Refresh linked stores" action that calls this sync endpoint and reloads store context.
-- Sync also attempts to import credentials from `shop_credentials` when a compatible token field exists and the token validates against Shopify.
+- Sync also attempts to import credentials from `shop_credentials` when compatible credential fields exist (encrypted preferred, plaintext fallback).
 
 ### Uninstall Webhook
 
 - `POST shopify_app_uninstalled` accepts Shopify uninstall webhook payloads.
 - It validates `x-shopify-hmac-sha256` with `SHOPIFY_WEBHOOK_SECRET`.
-- On valid uninstall webhook, it clears encrypted access tokens from `store_shopify_credentials` for the affected `shopify_domain`.
+- On valid uninstall webhook, it deletes `store_shopify_credentials` rows for the affected `shopify_domain`.
 
 ### No Manual Store Bootstrap in Portal
 
 - Portal dashboard and stores list must not provide manual "create store" forms.
 - Empty state must communicate that owner stores are created through Shopify install.
+
+### Store Connection State in Portal
+
+- Store list/detail views expose Shopify connection state (`Connected`/`Disconnected`) from canonical credentials table presence.
+- Disconnected stores provide explicit actions to `Reconnect on Shopify` and `Refresh linked stores` without deleting store ownership records.
 
 ## Team Membership
 

@@ -60,11 +60,12 @@ Out of scope:
 
 - Add a sync endpoint that imports owner-linked stores from legacy Shopify linkage tables/views into canonical portal tables.
 - Expose sync trigger in portal empty state to recover store visibility after Shopify app linking.
-- During sync, attempt to import encrypted Shopify credentials from legacy credentials storage when token columns are available.
+- During sync, attempt to import Shopify credentials from legacy credentials storage (encrypted columns first, plaintext fallback).
 
 ### 5) Uninstall handling
 
 - Add a Shopify uninstall webhook endpoint that verifies `X-Shopify-Hmac-Sha256` and revokes encrypted Shopify credentials for the uninstalled shop.
+- Keep store ownership records visible in portal after uninstall, but mark connection as disconnected and offer reconnect/sync actions.
 
 ## Risks and Mitigations
 

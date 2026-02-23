@@ -28,6 +28,9 @@ type CandidateStore = {
 type LegacyShopCredentialRow = {
   shopifyDomain: string;
   accessToken: string | null;
+  accessTokenCiphertext: string | null;
+  accessTokenIv: string | null;
+  lastValidatedAt: string | null;
 };
 
 const SHOPIFY_API_VERSION = Deno.env.get('SHOPIFY_API_VERSION') ?? '2024-10';
@@ -142,9 +145,16 @@ function parseLegacyShopCredentialRow(raw: unknown): LegacyShopCredentialRow | n
     }
   }
 
+  const accessTokenCiphertext = asOptionalString(row['access_token_ciphertext']);
+  const accessTokenIv = asOptionalString(row['access_token_iv']);
+  const lastValidatedAt = asOptionalString(row['last_validated_at']);
+
   return {
     shopifyDomain: normalizeShopifyDomainInput(shopifyDomainRaw),
     accessToken,
+    accessTokenCiphertext,
+    accessTokenIv,
+    lastValidatedAt,
   };
 }
 
@@ -378,7 +388,33 @@ async function upsertShopifyCredentialsFromLegacy(
 ): Promise<boolean> {
   const legacyCredential = await getLegacyShopCredential(supabaseAdmin, shopifyDomain);
 
-  if (!legacyCredential?.accessToken) {
+  if (!legacyCredential) {
+    return false;
+  }
+
+  const now = new Date().toISOString();
+
+  if (legacyCredential.accessTokenCiphertext && legacyCredential.accessTokenIv) {
+    const { error: copyEncryptedError } = await supabaseAdmin.from('store_shopify_credentials').upsert(
+      {
+        domain: normalizeDomainInput(domain),
+        shopify_domain: legacyCredential.shopifyDomain,
+        access_token_ciphertext: legacyCredential.accessTokenCiphertext,
+        access_token_iv: legacyCredential.accessTokenIv,
+        updated_at: now,
+        last_validated_at: legacyCredential.lastValidatedAt ?? now,
+      },
+      { onConflict: 'domain' }
+    );
+
+    if (copyEncryptedError) {
+      throw new Error(copyEncryptedError.message || `Failed to copy Shopify credentials for ${domain}`);
+    }
+
+    return true;
+  }
+
+  if (!legacyCredential.accessToken) {
     return false;
   }
 
@@ -388,7 +424,6 @@ async function upsertShopifyCredentialsFromLegacy(
   }
 
   const encrypted = await encryptAccessToken(legacyCredential.accessToken);
-  const now = new Date().toISOString();
 
   const { error } = await supabaseAdmin.from('store_shopify_credentials').upsert(
     {

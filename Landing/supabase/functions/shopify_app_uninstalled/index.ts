@@ -104,21 +104,15 @@ Deno.serve(async (req) => {
   }
 
   const supabaseAdmin = getServiceClient();
-  const now = new Date().toISOString();
 
   const { data, error } = await supabaseAdmin
     .from('store_shopify_credentials')
-    .update({
-      access_token_ciphertext: null,
-      access_token_iv: null,
-      last_validated_at: null,
-      updated_at: now,
-    })
+    .delete()
     .eq('shopify_domain', shopifyDomain)
     .select('domain');
 
   if (error) {
-    return errorResponse(500, error.message || 'Failed to revoke Shopify credentials');
+    return errorResponse(500, error.message || 'Failed to delete Shopify credentials');
   }
 
   return jsonResponse({

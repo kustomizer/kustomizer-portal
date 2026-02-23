@@ -4,9 +4,11 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, of, switchMap } from 'rxjs';
 import { finalize, map } from 'rxjs/operators';
+import { environment } from '../../../../environment/environment';
 import { ShopifyCredentialsFacade } from '../../../core/facades/shopify-credentials.facade';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
 import { Store } from '../../../core/models';
+import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install';
 
 @Component({
   selector: 'app-store-detail',
@@ -44,6 +46,39 @@ import { Store } from '../../../core/models';
 
         <section class="card">
           <h3>Shopify Connection</h3>
+          <div class="connection-status" *ngIf="store.shopifyConnected; else disconnectedState">
+            <span class="status connected">Connected</span>
+            <p class="muted" *ngIf="store.shopifyDomain">Connected to {{ store.shopifyDomain }}</p>
+            <p class="muted" *ngIf="store.shopifyLastValidatedAt">
+              Last validated {{ store.shopifyLastValidatedAt | date: 'medium' }}
+            </p>
+          </div>
+
+          <ng-template #disconnectedState>
+            <div class="connection-status">
+              <span class="status disconnected">Disconnected</span>
+              <p class="muted">This store no longer has active Shopify credentials.</p>
+              <div class="connection-actions">
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  (click)="reconnectStore(store)"
+                  [disabled]="!shopifyInstallUrl || syncingStores"
+                >
+                  Reconnect on Shopify
+                </button>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  (click)="syncLinkedStores()"
+                  [disabled]="syncingStores"
+                >
+                  {{ syncingStores ? 'Refreshing...' : 'Refresh linked stores' }}
+                </button>
+              </div>
+            </div>
+          </ng-template>
+
           <p class="muted">
             Add a Shopify Admin API access token. The token is stored encrypted and will not be shown again.
           </p>
@@ -56,7 +91,7 @@ import { Store } from '../../../core/models';
                   id="shopifyDomain"
                   type="text"
                   formControlName="shopifyDomain"
-                  placeholder="your-shop.myshopify.com"
+                  [placeholder]="store.shopifyDomain || 'your-shop.myshopify.com'"
                   [disabled]="savingShopify"
                 />
               </div>
@@ -136,6 +171,38 @@ import { Store } from '../../../core/models';
 
       .state.success {
         color: #10b981;
+      }
+
+      .connection-status {
+        display: grid;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .status {
+        width: fit-content;
+        padding: 0.25rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .status.connected {
+        color: #10b981;
+        background: rgba(16, 185, 129, 0.15);
+      }
+
+      .status.disconnected {
+        color: var(--danger);
+        background: rgba(var(--danger-rgb, 239, 68, 68), 0.15);
+      }
+
+      .connection-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
       }
 
       .muted {
@@ -286,6 +353,9 @@ export class StoreDetailComponent {
   savingShopify = false;
   shopifyError = '';
   shopifySuccess = '';
+  syncingStores = false;
+
+  readonly shopifyInstallUrl = resolveShopifyInstallUrl(environment.publicShopifyInstallUrl);
 
   readonly shopifyForm = this.formBuilder.group({
     shopifyDomain: ['', [Validators.required]],
@@ -350,6 +420,52 @@ export class StoreDetailComponent {
         },
         error: (error: Error) => {
           this.shopifyError = error instanceof Error ? error.message : 'Failed to save Shopify credentials.';
+          this.cdr.detectChanges();
+        },
+      });
+  }
+
+  reconnectStore(store: Store): void {
+    if (!this.shopifyInstallUrl || typeof window === 'undefined') {
+      return;
+    }
+
+    const url = buildShopifyInstallUrl(this.shopifyInstallUrl, store.shopifyDomain ?? store.domain);
+    if (!url) {
+      return;
+    }
+
+    window.location.assign(url);
+  }
+
+  syncLinkedStores(): void {
+    if (this.syncingStores) {
+      return;
+    }
+
+    this.syncingStores = true;
+    this.shopifyError = '';
+    this.shopifySuccess = '';
+
+    this.storeContext
+      .syncOwnerStoresFromLegacy()
+      .pipe(
+        finalize(() => {
+          this.syncingStores = false;
+          this.cdr.detectChanges();
+        })
+      )
+      .subscribe({
+        next: (result) => {
+          this.shopifySuccess =
+            result.synced > 0
+              ? `${result.synced} store${result.synced === 1 ? '' : 's'} refreshed from Shopify.`
+              : 'No linked owner stores found yet.';
+          this.storeContext.loadStores();
+          this.cdr.detectChanges();
+        },
+        error: (error: Error) => {
+          this.shopifyError = error?.message || 'Could not refresh linked stores.';
           this.cdr.detectChanges();
         },
       });
