@@ -13,6 +13,7 @@ export interface BootstrapOwnerStoreResponse {
 // Sync Owner Stores From Legacy
 export interface SyncOwnerStoresFromLegacyResponse {
   synced: number;
+  credentials_synced?: number;
   stores: Array<{
     domain: string;
     shopify_domain: string | null;

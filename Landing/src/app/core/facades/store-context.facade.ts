@@ -4,6 +4,7 @@ import { map, switchMap, tap, catchError, shareReplay } from 'rxjs/operators';
 import { Store } from '../models';
 import { Tier } from '../types/enums';
 import { STORES_REPOSITORY, BOOTSTRAP_REPOSITORY } from '../repositories';
+import { SyncOwnerStoresResponse } from '../repositories/bootstrap.repository';
 import { Loadable, toLoadable } from '../../shared/utils/loadable';
 import { StorageService } from '../services/storage.service';
 
@@ -100,12 +101,12 @@ export class StoreContextFacade {
     );
   }
 
-  syncOwnerStoresFromLegacy(): Observable<number> {
+  syncOwnerStoresFromLegacy(): Observable<SyncOwnerStoresResponse> {
     return this.bootstrapRepo.syncOwnerStoresFromLegacy().pipe(
       tap(() => {
         this.refreshTrigger$.next();
       }),
-      map((response) => response.synced),
+      map((response) => response),
       catchError((error) => {
         return throwError(() => error);
       })

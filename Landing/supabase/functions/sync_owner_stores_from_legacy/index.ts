@@ -25,45 +25,24 @@ type CandidateStore = {
   source: 'legacy_store_users' | 'legacy_shops';
 };
 
-function decodeBase64Url(value: string): string | null {
-  try {
-    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-    const padding = normalized.length % 4;
-    const padded = padding === 0 ? normalized : normalized + '='.repeat(4 - padding);
-    return atob(padded);
-  } catch {
-    return null;
-  }
-}
+type LegacyShopCredentialRow = {
+  shopifyDomain: string;
+  accessToken: string | null;
+};
 
-function extractEmailFromAuthorizationHeader(authHeader: string | null): string | null {
-  if (!authHeader) {
-    return null;
-  }
+const SHOPIFY_API_VERSION = Deno.env.get('SHOPIFY_API_VERSION') ?? '2024-10';
 
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
-  if (!token) {
-    return null;
-  }
-
-  const [, payloadPart] = token.split('.');
-  if (!payloadPart) {
-    return null;
-  }
-
-  const decodedPayload = decodeBase64Url(payloadPart);
-  if (!decodedPayload) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(decodedPayload) as { email?: unknown };
-    const email = asString(parsed.email);
-    return email ? email.toLowerCase() : null;
-  } catch {
-    return null;
-  }
-}
+const LEGACY_ACCESS_TOKEN_KEYS = [
+  'access_token',
+  'accessToken',
+  'admin_access_token',
+  'adminAccessToken',
+  'shopify_access_token',
+  'shopifyAccessToken',
+  'token',
+  'shop_token',
+  'shopToken',
+];
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') {
@@ -142,6 +121,33 @@ function parseLegacyShopRow(raw: unknown): LegacyShopRow | null {
   };
 }
 
+function parseLegacyShopCredentialRow(raw: unknown): LegacyShopCredentialRow | null {
+  const row = asRecord(raw);
+  if (!row) {
+    return null;
+  }
+
+  const shopifyDomainRaw = asString(row['shopify_domain']);
+  if (!shopifyDomainRaw) {
+    return null;
+  }
+
+  let accessToken: string | null = null;
+
+  for (const key of LEGACY_ACCESS_TOKEN_KEYS) {
+    const candidate = asOptionalString(row[key]);
+    if (candidate) {
+      accessToken = candidate;
+      break;
+    }
+  }
+
+  return {
+    shopifyDomain: normalizeShopifyDomainInput(shopifyDomainRaw),
+    accessToken,
+  };
+}
+
 function deriveDomainFromShopifyDomain(shopifyDomain: string): string {
   return normalizeDomainInput(shopifyDomain.replace(/\.myshopify\.com$/, ''));
 }
@@ -163,6 +169,93 @@ function resolveDomainFromLegacyShop(row: LegacyShopRow): string {
 
 function buildStoreName(domain: string): string {
   return domain;
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) {
+    bytes[i] = bin.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) {
+    bin += String.fromCharCode(bytes[i]);
+  }
+  return btoa(bin);
+}
+
+let cachedCryptoKey: CryptoKey | null = null;
+
+async function getEncryptionKey(): Promise<CryptoKey> {
+  if (cachedCryptoKey) {
+    return cachedCryptoKey;
+  }
+
+  const keyB64 = Deno.env.get('SHOPIFY_TOKEN_ENCRYPTION_KEY');
+  if (!keyB64) {
+    throw new Error('Missing SHOPIFY_TOKEN_ENCRYPTION_KEY');
+  }
+
+  const rawKey = base64ToBytes(keyB64);
+  cachedCryptoKey = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  return cachedCryptoKey;
+}
+
+async function encryptAccessToken(token: string): Promise<{ ciphertextB64: string; ivB64: string }> {
+  const key = await getEncryptionKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = new TextEncoder().encode(token);
+
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
+
+  return {
+    ciphertextB64: bytesToBase64(new Uint8Array(ciphertext)),
+    ivB64: bytesToBase64(iv),
+  };
+}
+
+async function shopifyGraphQL(shopifyDomain: string, accessToken: string, query: string) {
+  const url = `https://${shopifyDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': accessToken,
+    },
+    body: JSON.stringify({ query }),
+  });
+
+  const bodyText = await resp.text();
+
+  if (!resp.ok) {
+    return { ok: false as const, status: resp.status, body: bodyText };
+  }
+
+  try {
+    const json = JSON.parse(bodyText);
+    return { ok: true as const, json };
+  } catch {
+    return { ok: false as const, status: 500, body: bodyText };
+  }
+}
+
+async function validateCredentials(shopifyDomain: string, accessToken: string): Promise<boolean> {
+  const query = `query { metaobjectDefinitions(first: 1) { edges { node { id type } } } }`;
+  const resp = await shopifyGraphQL(shopifyDomain, accessToken, query);
+
+  if (!resp.ok) {
+    return false;
+  }
+
+  if (resp.json?.errors?.length) {
+    return false;
+  }
+
+  return true;
 }
 
 async function ensureUserLicense(supabaseAdmin: ReturnType<typeof getServiceClient>, email: string) {
@@ -254,6 +347,68 @@ async function getCandidatesFromLegacyShops(
     }));
 }
 
+async function getLegacyShopCredential(
+  supabaseAdmin: ReturnType<typeof getServiceClient>,
+  shopifyDomain: string
+): Promise<LegacyShopCredentialRow | null> {
+  const normalizedShopifyDomain = normalizeShopifyDomainInput(shopifyDomain);
+
+  const { data, error } = await supabaseAdmin
+    .from('shop_credentials')
+    .select('*')
+    .eq('shopify_domain', normalizedShopifyDomain)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  const parsed = parseLegacyShopCredentialRow(data);
+  if (!parsed) {
+    return null;
+  }
+
+  return parsed;
+}
+
+async function upsertShopifyCredentialsFromLegacy(
+  supabaseAdmin: ReturnType<typeof getServiceClient>,
+  domain: string,
+  shopifyDomain: string
+): Promise<boolean> {
+  const legacyCredential = await getLegacyShopCredential(supabaseAdmin, shopifyDomain);
+
+  if (!legacyCredential?.accessToken) {
+    return false;
+  }
+
+  const valid = await validateCredentials(legacyCredential.shopifyDomain, legacyCredential.accessToken);
+  if (!valid) {
+    return false;
+  }
+
+  const encrypted = await encryptAccessToken(legacyCredential.accessToken);
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseAdmin.from('store_shopify_credentials').upsert(
+    {
+      domain: normalizeDomainInput(domain),
+      shopify_domain: legacyCredential.shopifyDomain,
+      access_token_ciphertext: encrypted.ciphertextB64,
+      access_token_iv: encrypted.ivB64,
+      updated_at: now,
+      last_validated_at: now,
+    },
+    { onConflict: 'domain' }
+  );
+
+  if (error) {
+    throw new Error(error.message || `Failed to sync Shopify credentials for ${domain}`);
+  }
+
+  return true;
+}
+
 function dedupeCandidates(candidates: CandidateStore[]): CandidateStore[] {
   const byDomain = new Map<string, CandidateStore>();
 
@@ -328,9 +483,7 @@ Deno.serve(async (req) => {
   }
 
   const user = await getUser(req);
-  const emailFromUser = user?.email?.trim().toLowerCase() ?? null;
-  const emailFromJwt = extractEmailFromAuthorizationHeader(req.headers.get('Authorization'));
-  const email = emailFromUser ?? emailFromJwt;
+  const email = user?.email?.trim().toLowerCase() ?? null;
 
   if (!email) {
     return errorResponse(401, 'Unauthorized', 'MISSING_AUTH_EMAIL');
@@ -347,13 +500,32 @@ Deno.serve(async (req) => {
     ]);
 
     const candidates = dedupeCandidates([...fromLegacyUsers, ...fromLegacyShops]);
+    let credentialsSynced = 0;
 
     for (const candidate of candidates) {
       await upsertOwnerStore(supabaseAdmin, email, candidate);
+
+      if (!candidate.shopifyDomain) {
+        continue;
+      }
+
+      try {
+        const synced = await upsertShopifyCredentialsFromLegacy(
+          supabaseAdmin,
+          candidate.domain,
+          candidate.shopifyDomain
+        );
+        if (synced) {
+          credentialsSynced += 1;
+        }
+      } catch {
+        // Keep store ownership sync resilient even when credentials cannot be imported.
+      }
     }
 
     return jsonResponse({
       synced: candidates.length,
+      credentials_synced: credentialsSynced,
       stores: candidates.map((candidate) => ({
         domain: candidate.domain,
         shopify_domain: candidate.shopifyDomain,

@@ -8,6 +8,7 @@ export interface BootstrapResponse {
 
 export interface SyncOwnerStoresResponse {
   synced: number;
+  credentialsSynced?: number;
   stores: Array<{
     domain: string;
     shopifyDomain: string | null;

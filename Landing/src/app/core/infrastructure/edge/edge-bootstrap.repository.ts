@@ -47,6 +47,7 @@ export class EdgeBootstrapRepository implements BootstrapRepository {
       .pipe(
         map((response) => ({
           synced: response.synced,
+          credentialsSynced: response.credentials_synced,
           stores: response.stores.map((store) => ({
             domain: store.domain,
             shopifyDomain: store.shopify_domain,

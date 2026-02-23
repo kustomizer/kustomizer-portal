@@ -351,10 +351,17 @@ export class PortalDashboardComponent implements OnInit {
         })
       )
       .subscribe({
-        next: (syncedCount) => {
+        next: (result) => {
+          const syncedCount = result.synced;
+          const credentialsSynced = result.credentialsSynced ?? 0;
+
           this.syncSuccess =
             syncedCount > 0
-              ? `${syncedCount} store${syncedCount === 1 ? '' : 's'} imported from Shopify.`
+              ? `${syncedCount} store${syncedCount === 1 ? '' : 's'} imported from Shopify${
+                  credentialsSynced > 0
+                    ? ` (${credentialsSynced} credential${credentialsSynced === 1 ? '' : 's'} synced)`
+                    : ''
+                }.`
               : 'No linked owner stores found yet. Finish install in Shopify and retry.';
         },
         error: (error: Error) => {
