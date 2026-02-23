@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { finalize } from 'rxjs/operators';
 import { environment } from '../../../../environment/environment';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
 import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install';
@@ -33,12 +34,23 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
             type="button"
             class="btn-primary"
             (click)="openShopifyInstall()"
-            [disabled]="!shopifyInstallUrl"
+            [disabled]="!shopifyInstallUrl || syncingStores"
           >
             Install on Shopify
           </button>
+          <button
+            type="button"
+            class="btn-secondary"
+            (click)="syncLinkedStores()"
+            [disabled]="syncingStores"
+          >
+            {{ syncingStores ? 'Refreshing...' : 'Refresh linked stores' }}
+          </button>
           <a routerLink="/app/install" class="btn-link">See integration guide</a>
         </div>
+
+        <p class="muted error" *ngIf="syncError">{{ syncError }}</p>
+        <p class="muted success" *ngIf="syncSuccess">{{ syncSuccess }}</p>
 
         <p class="muted" *ngIf="!shopifyInstallUrl">
           Shopify install URL is not configured yet. Contact support.
@@ -119,6 +131,21 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
       }
 
       .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-secondary {
+        padding: 0.85rem 1rem;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--foreground);
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .btn-secondary:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
@@ -216,6 +243,14 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
         font-size: 0.85rem;
         margin: 0;
       }
+
+      .muted.error {
+        color: var(--danger);
+      }
+
+      .muted.success {
+        color: #10b981;
+      }
     `,
   ],
 })
@@ -224,6 +259,10 @@ export class StoreListComponent {
 
   readonly vm$ = this.storeContext.vm$;
   readonly shopifyInstallUrl = resolveShopifyInstallUrl(environment.publicShopifyInstallUrl);
+
+  syncingStores = false;
+  syncError = '';
+  syncSuccess = '';
 
   setActiveStore(storeId: string): void {
     this.storeContext.setActiveStore(storeId);
@@ -235,5 +274,34 @@ export class StoreListComponent {
     }
 
     window.location.assign(this.shopifyInstallUrl);
+  }
+
+  syncLinkedStores(): void {
+    if (this.syncingStores) {
+      return;
+    }
+
+    this.syncingStores = true;
+    this.syncError = '';
+    this.syncSuccess = '';
+
+    this.storeContext
+      .syncOwnerStoresFromLegacy()
+      .pipe(
+        finalize(() => {
+          this.syncingStores = false;
+        })
+      )
+      .subscribe({
+        next: (syncedCount) => {
+          this.syncSuccess =
+            syncedCount > 0
+              ? `${syncedCount} store${syncedCount === 1 ? '' : 's'} imported from Shopify.`
+              : 'No linked owner stores found yet. Finish install in Shopify and retry.';
+        },
+        error: (error: Error) => {
+          this.syncError = error?.message || 'Could not refresh linked stores.';
+        },
+      });
   }
 }

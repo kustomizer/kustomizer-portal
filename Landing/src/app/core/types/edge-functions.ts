@@ -10,6 +10,16 @@ export interface BootstrapOwnerStoreResponse {
   license_id: string;
 }
 
+// Sync Owner Stores From Legacy
+export interface SyncOwnerStoresFromLegacyResponse {
+  synced: number;
+  stores: Array<{
+    domain: string;
+    shopify_domain: string | null;
+    source: 'legacy_store_users' | 'legacy_shops';
+  }>;
+}
+
 // Invite Store User
 export interface InviteStoreUserRequest {
   domain: string;

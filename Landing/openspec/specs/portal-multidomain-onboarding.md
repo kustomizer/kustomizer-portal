@@ -16,6 +16,11 @@ This spec defines owner onboarding and multidomain behavior for the client porta
 - If `shop` query param is present (e.g. `shop=brand.myshopify.com`) and OAuth env vars are set, the endpoint redirects to Shopify OAuth authorize URL and sets a short-lived `shopify_oauth_state` cookie.
 - If `shop` is missing, or OAuth env vars are not configured, the endpoint redirects to a configured fallback install URL.
 
+### Legacy Sync Bridge
+
+- `POST sync_owner_stores_from_legacy` imports owner-linked stores for the authenticated email from legacy sources (`v_legacy_store_users`, `shops`) into canonical portal tables (`stores`, `store_users`).
+- Dashboard and stores empty-state include a "Refresh linked stores" action that calls this sync endpoint and reloads store context.
+
 ### No Manual Store Bootstrap in Portal
 
 - Portal dashboard and stores list must not provide manual "create store" forms.

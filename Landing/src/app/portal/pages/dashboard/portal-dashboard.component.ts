@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { filter, take } from 'rxjs/operators';
+import { filter, finalize, take } from 'rxjs/operators';
 import { environment } from '../../../../environment/environment';
 import { LicenseFacade } from '../../../core/facades/license.facade';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
@@ -28,12 +28,23 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
             type="button"
             class="btn-primary"
             (click)="openShopifyInstall()"
-            [disabled]="!shopifyInstallUrl"
+            [disabled]="!shopifyInstallUrl || syncingStores"
           >
             Install on Shopify
           </button>
+          <button
+            type="button"
+            class="btn-secondary"
+            (click)="syncLinkedStores()"
+            [disabled]="syncingStores"
+          >
+            {{ syncingStores ? 'Refreshing...' : 'Refresh linked stores' }}
+          </button>
           <a routerLink="/app/install" class="btn-link">See integration guide</a>
         </div>
+
+        <p class="hint error" *ngIf="syncError">{{ syncError }}</p>
+        <p class="hint success" *ngIf="syncSuccess">{{ syncSuccess }}</p>
 
         <p class="hint" *ngIf="!shopifyInstallUrl">
           Shopify install URL is not configured yet. Contact support.
@@ -171,6 +182,29 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
         font-weight: 600;
       }
 
+      .btn-secondary {
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--foreground);
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .btn-secondary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .hint.error {
+        color: var(--danger);
+      }
+
+      .hint.success {
+        color: #10b981;
+      }
+
       .grid {
         display: grid;
         gap: 1.5rem;
@@ -270,6 +304,10 @@ export class PortalDashboardComponent implements OnInit {
   readonly licenseVm$ = this.licenseFacade.vm$;
   readonly shopifyInstallUrl = resolveShopifyInstallUrl(environment.publicShopifyInstallUrl);
 
+  syncingStores = false;
+  syncError = '';
+  syncSuccess = '';
+
   ngOnInit(): void {
     const shouldRedirectToShopify = this.route.snapshot.queryParamMap.get('onboarding') === 'shopify';
     if (!shouldRedirectToShopify || !this.shopifyInstallUrl) {
@@ -294,6 +332,35 @@ export class PortalDashboardComponent implements OnInit {
     }
 
     window.location.assign(this.shopifyInstallUrl);
+  }
+
+  syncLinkedStores(): void {
+    if (this.syncingStores) {
+      return;
+    }
+
+    this.syncingStores = true;
+    this.syncError = '';
+    this.syncSuccess = '';
+
+    this.storeContextFacade
+      .syncOwnerStoresFromLegacy()
+      .pipe(
+        finalize(() => {
+          this.syncingStores = false;
+        })
+      )
+      .subscribe({
+        next: (syncedCount) => {
+          this.syncSuccess =
+            syncedCount > 0
+              ? `${syncedCount} store${syncedCount === 1 ? '' : 's'} imported from Shopify.`
+              : 'No linked owner stores found yet. Finish install in Shopify and retry.';
+        },
+        error: (error: Error) => {
+          this.syncError = error?.message || 'Could not refresh linked stores.';
+        },
+      });
   }
 
   getLicenseStatusClass(active: boolean, expiresAt?: string | null): string {

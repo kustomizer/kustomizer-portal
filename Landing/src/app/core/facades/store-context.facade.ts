@@ -100,6 +100,18 @@ export class StoreContextFacade {
     );
   }
 
+  syncOwnerStoresFromLegacy(): Observable<number> {
+    return this.bootstrapRepo.syncOwnerStoresFromLegacy().pipe(
+      tap(() => {
+        this.refreshTrigger$.next();
+      }),
+      map((response) => response.synced),
+      catchError((error) => {
+        return throwError(() => error);
+      })
+    );
+  }
+
   setActiveStore(storeId: string): void {
     this.activeStoreIdSubject.next(storeId);
     this.saveActiveStoreId(storeId);

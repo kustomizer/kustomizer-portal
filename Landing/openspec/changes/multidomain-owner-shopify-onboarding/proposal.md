@@ -56,6 +56,11 @@ Out of scope:
 - Existing team invite/remove flow remains owner-gated and domain-scoped.
 - No changes to role semantics (`owner`, `admin`, `reader`) or status checks.
 
+### 4) Legacy-to-portal owner sync bridge
+
+- Add a sync endpoint that imports owner-linked stores from legacy Shopify linkage tables/views into canonical portal tables.
+- Expose sync trigger in portal empty state to recover store visibility after Shopify app linking.
+
 ## Risks and Mitigations
 
 - Risk: Wrong Shopify install URL in environment leads to bad redirect.
