@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, from, throwError } from 'rxjs';
+import { Observable, from, of, throwError } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
 import { StoresRepository } from '../../repositories/stores.repository';
 import { Store } from '../../models';
@@ -7,6 +7,7 @@ import { SupabaseClientService } from './supabase-client.service';
 import { mapSupabaseErrorToDomainError } from './error-mapper';
 
 type StoreCredentialRow = {
+  domain: string;
   shopify_domain?: string | null;
   access_token_ciphertext?: string | null;
   access_token_iv?: string | null;
@@ -18,7 +19,6 @@ type StoreRow = {
   name: string;
   owner_id: string;
   created_at?: string;
-  store_shopify_credentials?: StoreCredentialRow | StoreCredentialRow[] | null;
 };
 
 @Injectable()
@@ -34,13 +34,7 @@ export class SupabaseStoresRepository implements StoresRepository {
           domain,
           name,
           owner_id,
-          created_at,
-          store_shopify_credentials (
-            shopify_domain,
-            access_token_ciphertext,
-            access_token_iv,
-            last_validated_at
-          )
+          created_at
         `
         )
         .order('created_at', { ascending: false })
@@ -49,8 +43,9 @@ export class SupabaseStoresRepository implements StoresRepository {
         if (error) {
           throw mapSupabaseErrorToDomainError(error);
         }
-        return (data || []).map((row) => this.mapToStore(row));
+        return (data || []).map((row) => this.mapToStore(row as StoreRow));
       }),
+      switchMap((stores) => this.attachCredentialStatus(stores)),
       catchError((error) => {
         return throwError(() => mapSupabaseErrorToDomainError(error));
       })
@@ -66,13 +61,7 @@ export class SupabaseStoresRepository implements StoresRepository {
           domain,
           name,
           owner_id,
-          created_at,
-          store_shopify_credentials (
-            shopify_domain,
-            access_token_ciphertext,
-            access_token_iv,
-            last_validated_at
-          )
+          created_at
         `
         )
         .eq('domain', id)
@@ -86,7 +75,14 @@ export class SupabaseStoresRepository implements StoresRepository {
           }
           throw mapSupabaseErrorToDomainError(error);
         }
-        return data ? this.mapToStore(data) : null;
+        return data ? this.mapToStore(data as StoreRow) : null;
+      }),
+      switchMap((store) => {
+        if (!store) {
+          return of(null);
+        }
+
+        return this.attachCredentialStatus([store]).pipe(map((stores) => stores[0] ?? null));
       }),
       catchError((error) => {
         return throwError(() => mapSupabaseErrorToDomainError(error));
@@ -155,36 +151,57 @@ export class SupabaseStoresRepository implements StoresRepository {
   }
 
   private mapToStore(row: StoreRow): Store {
-    const credentials = this.pickCredentialRow(row.store_shopify_credentials);
-
-    const hasCiphertext =
-      typeof credentials?.access_token_ciphertext === 'string' &&
-      credentials.access_token_ciphertext.length > 0;
-    const hasIv = typeof credentials?.access_token_iv === 'string' && credentials.access_token_iv.length > 0;
-
     return {
       id: row.domain,
       domain: row.domain,
       name: row.name,
       ownerEmail: row.owner_id,
       createdAt: row.created_at,
+      shopifyConnected: false,
+      shopifyDomain: null,
+      shopifyLastValidatedAt: null,
+    };
+  }
+
+  private attachCredentialStatus(stores: Store[]): Observable<Store[]> {
+    if (stores.length === 0) {
+      return of(stores);
+    }
+
+    const domains = [...new Set(stores.map((store) => store.domain))];
+
+    return from(
+      this.supabaseClient.client
+        .from('store_shopify_credentials')
+        .select('domain, shopify_domain, access_token_ciphertext, access_token_iv, last_validated_at')
+        .in('domain', domains)
+    ).pipe(
+      map(({ data, error }) => {
+        if (error) {
+          throw mapSupabaseErrorToDomainError(error);
+        }
+
+        const credentialsByDomain = new Map<string, StoreCredentialRow>();
+        for (const row of (data || []) as StoreCredentialRow[]) {
+          credentialsByDomain.set(row.domain, row);
+        }
+
+        return stores.map((store) => this.applyCredentialState(store, credentialsByDomain.get(store.domain)));
+      })
+    );
+  }
+
+  private applyCredentialState(store: Store, credentials?: StoreCredentialRow): Store {
+    const hasCiphertext =
+      typeof credentials?.access_token_ciphertext === 'string' &&
+      credentials.access_token_ciphertext.length > 0;
+    const hasIv = typeof credentials?.access_token_iv === 'string' && credentials.access_token_iv.length > 0;
+
+    return {
+      ...store,
       shopifyConnected: hasCiphertext && hasIv,
       shopifyDomain: credentials?.shopify_domain ?? null,
       shopifyLastValidatedAt: credentials?.last_validated_at ?? null,
     };
-  }
-
-  private pickCredentialRow(
-    credentials: StoreRow['store_shopify_credentials']
-  ): StoreCredentialRow | null {
-    if (!credentials) {
-      return null;
-    }
-
-    if (Array.isArray(credentials)) {
-      return credentials[0] ?? null;
-    }
-
-    return credentials;
   }
 }
