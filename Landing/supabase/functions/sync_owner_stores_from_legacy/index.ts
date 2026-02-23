@@ -25,6 +25,46 @@ type CandidateStore = {
   source: 'legacy_store_users' | 'legacy_shops';
 };
 
+function decodeBase64Url(value: string): string | null {
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = normalized.length % 4;
+    const padded = padding === 0 ? normalized : normalized + '='.repeat(4 - padding);
+    return atob(padded);
+  } catch {
+    return null;
+  }
+}
+
+function extractEmailFromAuthorizationHeader(authHeader: string | null): string | null {
+  if (!authHeader) {
+    return null;
+  }
+
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  if (!token) {
+    return null;
+  }
+
+  const [, payloadPart] = token.split('.');
+  if (!payloadPart) {
+    return null;
+  }
+
+  const decodedPayload = decodeBase64Url(payloadPart);
+  if (!decodedPayload) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(decodedPayload) as { email?: unknown };
+    const email = asString(parsed.email);
+    return email ? email.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') {
     return null;
@@ -288,10 +328,12 @@ Deno.serve(async (req) => {
   }
 
   const user = await getUser(req);
-  const email = user?.email?.trim().toLowerCase();
+  const emailFromUser = user?.email?.trim().toLowerCase() ?? null;
+  const emailFromJwt = extractEmailFromAuthorizationHeader(req.headers.get('Authorization'));
+  const email = emailFromUser ?? emailFromJwt;
 
   if (!email) {
-    return errorResponse(401, 'Unauthorized');
+    return errorResponse(401, 'Unauthorized', 'MISSING_AUTH_EMAIL');
   }
 
   const supabaseAdmin = getServiceClient();

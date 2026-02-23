@@ -1,13 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { filter } from 'rxjs/operators';
 import { environment } from '../../../../environment/environment';
 import { AuthSession } from '../../models';
 
 @Injectable({ providedIn: 'root' })
 export class SupabaseClientService {
   private readonly supabase: SupabaseClient;
-  private readonly authStateSubject = new BehaviorSubject<AuthSession | null>(null);
+  private readonly authStateSubject = new BehaviorSubject<AuthSession | null | undefined>(undefined);
 
   constructor() {
     this.supabase = createClient(environment.supabaseUrl, environment.supabaseKey, {
@@ -27,7 +28,9 @@ export class SupabaseClientService {
   }
 
   get authState$(): Observable<AuthSession | null> {
-    return this.authStateSubject.asObservable();
+    return this.authStateSubject.asObservable().pipe(
+      filter((session): session is AuthSession | null => session !== undefined)
+    );
   }
 
   async getSession(): Promise<AuthSession | null> {
