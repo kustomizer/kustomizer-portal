@@ -16,11 +16,23 @@ This spec defines owner onboarding and multidomain behavior for the client porta
 - If `shop` query param is present (e.g. `shop=brand.myshopify.com`) and OAuth env vars are set, the endpoint redirects to Shopify OAuth authorize URL and sets a short-lived `shopify_oauth_state` cookie.
 - If `shop` is missing, or OAuth env vars are not configured, the endpoint redirects to a configured fallback install URL.
 
+### OAuth Callback + Finalize
+
+- `GET /api/shopify/callback` validates callback query params (`shop`, `code`, `state`, `hmac`) and verifies `shopify_oauth_state` cookie.
+- Callback exchanges authorization code for an Admin API token using `SHOPIFY_APP_CLIENT_ID` + `SHOPIFY_APP_CLIENT_SECRET` (or `SHOPIFY_API_SECRET`).
+- Callback calls `POST shopify_oauth_finalize` with a shared secret header to store canonical encrypted credentials in `store_shopify_credentials`.
+- Finalize must validate token access against Shopify, normalize `shopify_domain`, resolve canonical domain/owner from legacy `shops` mapping when present, and upsert canonical owner store records.
+- Callback redirects to a portal URL with `shopify=connected` or `shopify=error` query params.
+- Required callback envs:
+  - Vercel: `SHOPIFY_APP_CLIENT_ID`, `SHOPIFY_APP_CLIENT_SECRET` (or `SHOPIFY_API_SECRET`), `SHOPIFY_OAUTH_REDIRECT_URI`, `SUPABASE_URL`, `SHOPIFY_OAUTH_FINALIZE_SECRET`.
+  - Supabase: `SHOPIFY_OAUTH_FINALIZE_SECRET`.
+
 ### Legacy Sync Bridge
 
 - `POST sync_owner_stores_from_legacy` imports owner-linked stores for the authenticated email from legacy sources (`v_legacy_store_users`, `shops`) into canonical portal tables (`stores`, `store_users`).
 - Dashboard and stores empty-state include a "Refresh linked stores" action that calls this sync endpoint and reloads store context.
-- Sync also attempts to import credentials from `shop_credentials` when compatible credential fields exist (encrypted preferred, plaintext fallback).
+- Sync attempts to import credentials from `shop_credentials` and always re-encrypts imported tokens with the canonical `SHOPIFY_TOKEN_ENCRYPTION_KEY`.
+- If legacy ciphertext cannot be decrypted with the canonical key, sync may use optional legacy key secrets (`SHOPIFY_TOKEN_ENCRYPTION_KEY_LEGACY` or `SHOPIFY_LEGACY_TOKEN_ENCRYPTION_KEY`) and then rewrites canonical ciphertext.
 
 ### Uninstall Webhook
 
@@ -62,3 +74,12 @@ Behavior:
 ## Shopify Credentials Normalization
 
 - `owner_shopify_credentials_upsert` must normalize input `domain` and `shopify_domain` before validation and storage.
+- Metaobject endpoints decrypt credentials with the canonical key first, then optional legacy key secrets, and rewrite to canonical encryption when legacy key decryption succeeds.
+- When credentials exist but cannot be decrypted by configured keys, metaobject endpoints return `409` with reason `SHOPIFY_CREDENTIALS_RECONNECT_REQUIRED`.
+
+## Production Runbook Checks
+
+- Install -> connected: complete Shopify install, run owner sync if needed, and confirm store status is `Connected` in portal list/detail.
+- Metaobject read/write: call `kustomizer_shopify_metaobject_get` and `kustomizer_shopify_metaobject_upsert` for a known store and verify `ok: true` plus expected payloads.
+- Uninstall -> disconnected: trigger Shopify app uninstall webhook and confirm credentials row is removed while store remains visible as `Disconnected`.
+- Reconnect -> connected: reinstall/reconnect store credentials and verify portal status returns to `Connected` with successful metaobject read/write.

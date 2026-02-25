@@ -6,6 +6,7 @@ import {
   jsonResponse,
 } from '../_shared/edge.ts';
 import { normalizeDomainInput, normalizeShopifyDomainInput } from '../_shared/store-access.ts';
+import { decryptShopifyToken, encryptShopifyToken } from '../_shared/shopify-token-crypto.ts';
 
 type LegacyStoreUserRow = {
   domain: string;
@@ -30,7 +31,6 @@ type LegacyShopCredentialRow = {
   accessToken: string | null;
   accessTokenCiphertext: string | null;
   accessTokenIv: string | null;
-  lastValidatedAt: string | null;
 };
 
 const SHOPIFY_API_VERSION = Deno.env.get('SHOPIFY_API_VERSION') ?? '2024-10';
@@ -147,14 +147,12 @@ function parseLegacyShopCredentialRow(raw: unknown): LegacyShopCredentialRow | n
 
   const accessTokenCiphertext = asOptionalString(row['access_token_ciphertext']);
   const accessTokenIv = asOptionalString(row['access_token_iv']);
-  const lastValidatedAt = asOptionalString(row['last_validated_at']);
 
   return {
     shopifyDomain: normalizeShopifyDomainInput(shopifyDomainRaw),
     accessToken,
     accessTokenCiphertext,
     accessTokenIv,
-    lastValidatedAt,
   };
 }
 
@@ -181,54 +179,12 @@ function buildStoreName(domain: string): string {
   return domain;
 }
 
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) {
-    bytes[i] = bin.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) {
-    bin += String.fromCharCode(bytes[i]);
-  }
-  return btoa(bin);
-}
-
-let cachedCryptoKey: CryptoKey | null = null;
-
-async function getEncryptionKey(): Promise<CryptoKey> {
-  if (cachedCryptoKey) {
-    return cachedCryptoKey;
-  }
-
-  const keyB64 = Deno.env.get('SHOPIFY_TOKEN_ENCRYPTION_KEY');
-  if (!keyB64) {
-    throw new Error('Missing SHOPIFY_TOKEN_ENCRYPTION_KEY');
-  }
-
-  const rawKey = base64ToBytes(keyB64);
-  cachedCryptoKey = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt', 'decrypt']);
-  return cachedCryptoKey;
-}
-
-async function encryptAccessToken(token: string): Promise<{ ciphertextB64: string; ivB64: string }> {
-  const key = await getEncryptionKey();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const plaintext = new TextEncoder().encode(token);
-
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
-
-  return {
-    ciphertextB64: bytesToBase64(new Uint8Array(ciphertext)),
-    ivB64: bytesToBase64(iv),
-  };
-}
-
-async function shopifyGraphQL(shopifyDomain: string, accessToken: string, query: string) {
+async function shopifyGraphQL(
+  shopifyDomain: string,
+  accessToken: string,
+  query: string,
+  variables?: unknown
+) {
   const url = `https://${shopifyDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
   const resp = await fetch(url, {
     method: 'POST',
@@ -236,7 +192,7 @@ async function shopifyGraphQL(shopifyDomain: string, accessToken: string, query:
       'Content-Type': 'application/json',
       'X-Shopify-Access-Token': accessToken,
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, variables }),
   });
 
   const bodyText = await resp.text();
@@ -254,8 +210,20 @@ async function shopifyGraphQL(shopifyDomain: string, accessToken: string, query:
 }
 
 async function validateCredentials(shopifyDomain: string, accessToken: string): Promise<boolean> {
-  const query = `query { metaobjectDefinitions(first: 1) { edges { node { id type } } } }`;
-  const resp = await shopifyGraphQL(shopifyDomain, accessToken, query);
+  const query = `query ValidateToken($handle: MetaobjectHandleInput!) {
+    metaobjectByHandle(handle: $handle) {
+      id
+    }
+  }`;
+
+  const variables = {
+    handle: {
+      type: 'kustomizer_probe',
+      handle: 'kustomizer-probe',
+    },
+  };
+
+  const resp = await shopifyGraphQL(shopifyDomain, accessToken, query, variables);
 
   if (!resp.ok) {
     return false;
@@ -381,6 +349,41 @@ async function getLegacyShopCredential(
   return parsed;
 }
 
+async function resolveValidLegacyAccessToken(
+  legacyCredential: LegacyShopCredentialRow
+): Promise<string | null> {
+  const candidateTokens: string[] = [];
+
+  if (legacyCredential.accessToken) {
+    candidateTokens.push(legacyCredential.accessToken);
+  }
+
+  if (legacyCredential.accessTokenCiphertext && legacyCredential.accessTokenIv) {
+    try {
+      const decrypted = await decryptShopifyToken(
+        legacyCredential.accessTokenCiphertext,
+        legacyCredential.accessTokenIv
+      );
+      if (decrypted.token) {
+        candidateTokens.push(decrypted.token);
+      }
+    } catch {
+      // Keep sync resilient when legacy encrypted tokens use an unknown key.
+    }
+  }
+
+  const uniqueTokens = [...new Set(candidateTokens)];
+
+  for (const token of uniqueTokens) {
+    const valid = await validateCredentials(legacyCredential.shopifyDomain, token);
+    if (valid) {
+      return token;
+    }
+  }
+
+  return null;
+}
+
 async function upsertShopifyCredentialsFromLegacy(
   supabaseAdmin: ReturnType<typeof getServiceClient>,
   domain: string,
@@ -394,36 +397,12 @@ async function upsertShopifyCredentialsFromLegacy(
 
   const now = new Date().toISOString();
 
-  if (legacyCredential.accessTokenCiphertext && legacyCredential.accessTokenIv) {
-    const { error: copyEncryptedError } = await supabaseAdmin.from('store_shopify_credentials').upsert(
-      {
-        domain: normalizeDomainInput(domain),
-        shopify_domain: legacyCredential.shopifyDomain,
-        access_token_ciphertext: legacyCredential.accessTokenCiphertext,
-        access_token_iv: legacyCredential.accessTokenIv,
-        updated_at: now,
-        last_validated_at: legacyCredential.lastValidatedAt ?? now,
-      },
-      { onConflict: 'domain' }
-    );
-
-    if (copyEncryptedError) {
-      throw new Error(copyEncryptedError.message || `Failed to copy Shopify credentials for ${domain}`);
-    }
-
-    return true;
-  }
-
-  if (!legacyCredential.accessToken) {
+  const validAccessToken = await resolveValidLegacyAccessToken(legacyCredential);
+  if (!validAccessToken) {
     return false;
   }
 
-  const valid = await validateCredentials(legacyCredential.shopifyDomain, legacyCredential.accessToken);
-  if (!valid) {
-    return false;
-  }
-
-  const encrypted = await encryptAccessToken(legacyCredential.accessToken);
+  const encrypted = await encryptShopifyToken(validAccessToken);
 
   const { error } = await supabaseAdmin.from('store_shopify_credentials').upsert(
     {

@@ -23,6 +23,7 @@ In scope:
 
 - Portal UX changes to remove manual "create store" paths.
 - Registration flow redirect for owner onboarding via Shopify install URL.
+- Shopify OAuth callback/finalize flow to exchange authorization code for Admin API token and persist canonical encrypted credentials.
 - Multidomain resolution in Edge Functions used by the Kustomizer SPA:
   - `kustomizer_auth`
   - `kustomizer_shopify_metaobject_get`
@@ -30,7 +31,6 @@ In scope:
 
 Out of scope:
 
-- Implementing full Shopify OAuth callback/token exchange inside this repo.
 - Data backfill/migration scripts for existing rows.
 - Changes to admin backoffice flows unless strictly required by the above.
 
@@ -44,6 +44,13 @@ Out of scope:
 - The install endpoint supports optional `shop=<store>.myshopify.com` and can redirect either:
   - to Shopify OAuth authorize URL when OAuth env vars are configured, or
   - to a configured fallback install URL when no shop or OAuth config is available.
+
+### 1b) OAuth callback + credential finalize
+
+- Add `GET /api/shopify/callback` to validate OAuth callback params (`shop`, `code`, `state`, `hmac`) and state cookie.
+- Callback exchanges code for token with Shopify using app client id + client secret.
+- Callback calls a privileged finalize endpoint (`shopify_oauth_finalize`) to persist encrypted credentials in canonical `store_shopify_credentials`.
+- Finalize flow resolves owner/domain mapping from legacy `shops` linkage when available and upserts owner store membership in canonical tables.
 
 ### 2) Multidomain auth for editor endpoints
 

@@ -1,3 +1,5 @@
+const crypto = require('node:crypto');
+
 const DEFAULT_SHOPIFY_INSTALL_FALLBACK_URL =
   'https://admin.shopify.com/?organization_id=185071352&no_redirect=true&redirect=/oauth/redirect_from_developer_dashboard?client_id%3D95606a5f4f3c52b279cca5d8e090d1eb';
 
@@ -61,7 +63,7 @@ function buildOAuthInstallUrl(shop, config, state) {
 }
 
 function randomState() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  return crypto.randomUUID();
 }
 
 function getShopQueryParam(req) {

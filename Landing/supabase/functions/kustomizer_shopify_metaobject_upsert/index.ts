@@ -5,6 +5,7 @@ import {
   jsonResponse,
 } from '../_shared/edge.ts';
 import { normalizeShopifyDomainInput, resolveStoreMembership } from '../_shared/store-access.ts';
+import { decryptShopifyToken, encryptShopifyToken } from '../_shared/shopify-token-crypto.ts';
 
 type KustomizerShopifyMetaobjectUpsertRequest = {
   domain?: string;
@@ -24,39 +25,45 @@ type KustomizerShopifyMetaobjectUpsertRequest = {
 
 const SHOPIFY_API_VERSION = Deno.env.get('SHOPIFY_API_VERSION') ?? '2024-10';
 
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) {
-    bytes[i] = bin.charCodeAt(i);
+type StoreCredentialRow = {
+  shopify_domain: string | null;
+  access_token_ciphertext: string | null;
+  access_token_iv: string | null;
+};
+
+function asNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
   }
-  return bytes;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
-let cachedCryptoKey: CryptoKey | null = null;
+async function persistPrimaryCiphertext(
+  supabaseAdmin: ReturnType<typeof getServiceClient>,
+  canonicalDomain: string,
+  shopifyDomain: string,
+  accessToken: string
+) {
+  const now = new Date().toISOString();
+  const encrypted = await encryptShopifyToken(accessToken);
 
-async function getEncryptionKey(): Promise<CryptoKey> {
-  if (cachedCryptoKey) {
-    return cachedCryptoKey;
+  const { error } = await supabaseAdmin.from('store_shopify_credentials').upsert(
+    {
+      domain: canonicalDomain,
+      shopify_domain: shopifyDomain,
+      access_token_ciphertext: encrypted.ciphertextB64,
+      access_token_iv: encrypted.ivB64,
+      updated_at: now,
+      last_validated_at: now,
+    },
+    { onConflict: 'domain' }
+  );
+
+  if (error) {
+    throw new Error(error.message || `Failed to rewrite Shopify credentials for ${canonicalDomain}`);
   }
-
-  const keyB64 = Deno.env.get('SHOPIFY_TOKEN_ENCRYPTION_KEY');
-  if (!keyB64) {
-    throw new Error('Missing SHOPIFY_TOKEN_ENCRYPTION_KEY');
-  }
-
-  const rawKey = base64ToBytes(keyB64);
-  cachedCryptoKey = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt', 'decrypt']);
-  return cachedCryptoKey;
-}
-
-async function decryptAccessToken(ciphertextB64: string, ivB64: string): Promise<string> {
-  const key = await getEncryptionKey();
-  const iv = base64ToBytes(ivB64);
-  const ciphertext = base64ToBytes(ciphertextB64);
-
-  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-  return new TextDecoder().decode(plaintext);
 }
 
 async function shopifyGraphQL(shopifyDomain: string, accessToken: string, query: string, variables?: unknown) {
@@ -184,14 +191,34 @@ Deno.serve(async (req) => {
     return errorResponse(404, 'Shopify credentials not found');
   }
 
-  let accessToken: string;
-  try {
-    accessToken = await decryptAccessToken(creds.access_token_ciphertext, creds.access_token_iv);
-  } catch {
-    return errorResponse(500, 'Failed to decrypt Shopify credentials');
+  const credentialRow = creds as StoreCredentialRow;
+  const shopifyDomain = asNonEmptyString(credentialRow.shopify_domain);
+  const ciphertext = asNonEmptyString(credentialRow.access_token_ciphertext);
+  const iv = asNonEmptyString(credentialRow.access_token_iv);
+
+  if (!shopifyDomain || !ciphertext || !iv) {
+    return errorResponse(404, 'Shopify credentials not found');
   }
 
-  const shopifyDomain = String(creds.shopify_domain);
+  let accessToken: string;
+  try {
+    const decrypted = await decryptShopifyToken(ciphertext, iv);
+    accessToken = decrypted.token;
+
+    if (decrypted.keySource === 'legacy') {
+      try {
+        await persistPrimaryCiphertext(supabaseAdmin, canonicalDomain, shopifyDomain, accessToken);
+      } catch {
+        // Do not block editor writes when credential migration writeback fails.
+      }
+    }
+  } catch {
+    return errorResponse(
+      409,
+      'Shopify credentials require reconnect or key migration',
+      'SHOPIFY_CREDENTIALS_RECONNECT_REQUIRED'
+    );
+  }
 
   // Shopify Admin GraphQL: metaobjectUpsert (requires write_metaobjects)
   // https://shopify.dev/docs/api/admin-graphql/latest/mutations/metaobjectUpsert
