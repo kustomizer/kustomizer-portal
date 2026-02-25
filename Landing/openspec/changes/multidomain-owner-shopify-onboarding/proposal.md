@@ -24,6 +24,7 @@ In scope:
 - Portal UX changes to remove manual "create store" paths.
 - Registration flow redirect for owner onboarding via Shopify install URL.
 - Shopify OAuth callback/finalize flow to exchange authorization code for Admin API token and persist canonical encrypted credentials.
+- Shopify privacy compliance webhook endpoint for `customers/data_request`, `customers/redact`, and `shop/redact`.
 - Multidomain resolution in Edge Functions used by the Kustomizer SPA:
   - `kustomizer_auth`
   - `kustomizer_shopify_metaobject_get`
@@ -74,6 +75,12 @@ Out of scope:
 - Add a Shopify uninstall webhook endpoint that verifies `X-Shopify-Hmac-Sha256` and revokes encrypted Shopify credentials for the uninstalled shop.
 - Keep store ownership records visible in portal after uninstall, but mark connection as disconnected and offer reconnect/sync actions.
 - Resolve connection-status rendering through an owner-scoped Edge endpoint (instead of direct credential-table reads from browser clients).
+
+### 6) Privacy compliance webhooks
+
+- Add `POST /webhooks` to accept Shopify privacy compliance topics.
+- Validate `X-Shopify-Hmac-Sha256` using `SHOPIFY_WEBHOOK_SECRET` (fallback to app secret envs when needed).
+- Return quick 200 acknowledgements for valid requests and log topic/shop/webhook id metadata for auditability.
 
 ## Risks and Mitigations
 

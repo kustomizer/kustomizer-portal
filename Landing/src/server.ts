@@ -153,6 +153,62 @@ function verifyOAuthHmac(rawUrl: string, providedHmac: string, clientSecret: str
   return safeCompare(expected, providedHmac.toLowerCase());
 }
 
+function getWebhookSecret(): string | null {
+  const fromWebhookSecret = process.env['SHOPIFY_WEBHOOK_SECRET']?.trim();
+  if (fromWebhookSecret) {
+    return fromWebhookSecret;
+  }
+
+  const fromAppSecret = process.env['SHOPIFY_APP_CLIENT_SECRET']?.trim();
+  if (fromAppSecret) {
+    return fromAppSecret;
+  }
+
+  const fromLegacySecret = process.env['SHOPIFY_API_SECRET']?.trim();
+  return fromLegacySecret && fromLegacySecret.length > 0 ? fromLegacySecret : null;
+}
+
+function normalizeWebhookTopic(topicHeader: string | null | undefined): string | null {
+  if (!topicHeader) {
+    return null;
+  }
+
+  const normalized = topicHeader.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function isPrivacyWebhookTopic(topic: string | null): boolean {
+  return topic === 'customers/data_request' || topic === 'customers/redact' || topic === 'shop/redact';
+}
+
+function verifyWebhookHmac(rawBody: Buffer, providedHmac: string, secret: string): boolean {
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
+  return safeCompare(expected, providedHmac.trim());
+}
+
+async function readRawRequestBody(req: Request): Promise<Buffer> {
+  return await new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+
+    req.on('data', (chunk: Buffer | string) => {
+      if (typeof chunk === 'string') {
+        chunks.push(Buffer.from(chunk));
+        return;
+      }
+
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => {
+      resolve(Buffer.concat(chunks));
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+  });
+}
+
 function getOAuthCallbackConfig(): {
   clientId: string;
   clientSecret: string;
@@ -415,6 +471,58 @@ app.get('/api/shopify/callback', async (req, res) => {
     clearStateCookie(res);
     res.redirect(302, buildPortalRedirect(req, { shopify: 'error', reason: 'UNEXPECTED_CALLBACK_ERROR' }));
   }
+});
+
+app.post('/webhooks', async (req, res) => {
+  const topic = normalizeWebhookTopic(req.get('x-shopify-topic'));
+  if (!isPrivacyWebhookTopic(topic)) {
+    res.status(200).json({ ok: true });
+    return;
+  }
+
+  const webhookSecret = getWebhookSecret();
+  if (!webhookSecret) {
+    res.status(500).json({ message: 'Missing SHOPIFY_WEBHOOK_SECRET' });
+    return;
+  }
+
+  const providedHmac = req.get('x-shopify-hmac-sha256');
+  if (!providedHmac) {
+    res.status(401).json({ message: 'Missing Shopify webhook HMAC' });
+    return;
+  }
+
+  let rawBody: Buffer;
+  try {
+    rawBody = await readRawRequestBody(req);
+  } catch {
+    res.status(400).json({ message: 'Invalid webhook body' });
+    return;
+  }
+
+  if (!verifyWebhookHmac(rawBody, providedHmac, webhookSecret)) {
+    res.status(401).json({ message: 'Invalid Shopify webhook HMAC' });
+    return;
+  }
+
+  let payload: Record<string, unknown> | null = null;
+  try {
+    payload = rawBody.length > 0 ? (JSON.parse(rawBody.toString('utf-8')) as Record<string, unknown>) : null;
+  } catch {
+    payload = null;
+  }
+
+  const payloadShopDomain = payload?.['shop_domain'];
+  const shopDomain =
+    (typeof payloadShopDomain === 'string' && payloadShopDomain) || req.get('x-shopify-shop-domain') || null;
+
+  console.info('shopify-privacy-webhook', {
+    topic,
+    shop_domain: shopDomain,
+    webhook_id: req.get('x-shopify-webhook-id') ?? null,
+  });
+
+  res.status(200).json({ ok: true });
 });
 
 app.use(

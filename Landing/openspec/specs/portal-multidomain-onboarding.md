@@ -40,6 +40,12 @@ This spec defines owner onboarding and multidomain behavior for the client porta
 - It validates `x-shopify-hmac-sha256` with `SHOPIFY_WEBHOOK_SECRET`.
 - On valid uninstall webhook, it deletes `store_shopify_credentials` rows for the affected `shopify_domain`.
 
+### Privacy Compliance Webhooks
+
+- `POST /webhooks` accepts Shopify privacy topics (`customers/data_request`, `customers/redact`, `shop/redact`).
+- It validates `x-shopify-hmac-sha256` using `SHOPIFY_WEBHOOK_SECRET` (fallback to app secret envs when not explicitly set).
+- It returns `200` quickly for valid requests and logs webhook metadata (`topic`, `shop_domain`, `x-shopify-webhook-id`).
+
 ### No Manual Store Bootstrap in Portal
 
 - Portal dashboard and stores list must not provide manual "create store" forms.
