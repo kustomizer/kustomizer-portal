@@ -1,11 +1,11 @@
 import { StoreUserRole, StoreUserStatus } from '../types/enums';
-import { StoreDomain, UserEmail } from '../types/ids';
+import { UserEmail } from '../types/ids';
 
 /**
  * Store user entity (maps to backend store_users table)
  */
 export interface StoreUser {
-  domain: StoreDomain;
+  shopId: string;
   email: UserEmail;
   invitedBy?: UserEmail | null;
   role: StoreUserRole;

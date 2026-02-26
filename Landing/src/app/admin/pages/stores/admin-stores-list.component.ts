@@ -33,7 +33,7 @@ import { AdminFacade } from '../../../core/facades/admin.facade';
             <thead>
               <tr>
                 <th>Store Name</th>
-                <th>Domain</th>
+                <th>Shopify Domain</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -44,7 +44,7 @@ import { AdminFacade } from '../../../core/facades/admin.facade';
                   <strong>{{ store.name }}</strong>
                 </td>
                 <td>
-                  <code>{{ store.id }}</code>
+                  <code>{{ store.shopifyDomain }}</code>
                 </td>
                 <td>{{ store.createdAt | date: 'medium' }}</td>
                 <td>

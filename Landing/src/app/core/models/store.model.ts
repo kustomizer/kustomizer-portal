@@ -1,16 +1,15 @@
-import { StoreDomain, UserEmail } from '../types/ids';
+import { UserEmail } from '../types/ids';
 
 /**
  * Store entity (maps to backend stores table)
  */
 export interface Store {
-  id: StoreDomain; // Alias for legacy storeId usage
-  domain: StoreDomain;
+  id: string;
+  shopifyDomain: string;
   name: string;
   ownerEmail: UserEmail;
   createdAt?: string;
   shopifyConnected?: boolean;
-  shopifyDomain?: string | null;
   shopifyLastValidatedAt?: string | null;
 }
 

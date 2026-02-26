@@ -33,8 +33,8 @@ import { StoreUserRole, StoreUserStatus, Tier } from '../../../core/types/enums'
               <p>{{ detailState.data.store.name }}</p>
             </div>
             <div class="info-item">
-              <label>Domain</label>
-              <p><code>{{ detailState.data.store.domain }}</code></p>
+              <label>Shopify Domain</label>
+              <p><code>{{ detailState.data.store.shopifyDomain }}</code></p>
             </div>
             <div class="info-item">
               <label>Owner Email</label>

@@ -15,7 +15,7 @@ import { StoreUserRole, StoreUserStatus } from '../../../core/types/enums';
       <h2>Team Management</h2>
       <p>Invite team members and manage access to your store</p>
       <ng-container *ngIf="activeStore$ | async as store">
-        <p class="muted">Managing access for {{ store.name }} ({{ store.domain }})</p>
+        <p class="muted">Managing access for {{ store.name }} ({{ store.shopifyDomain }})</p>
       </ng-container>
     </div>
 

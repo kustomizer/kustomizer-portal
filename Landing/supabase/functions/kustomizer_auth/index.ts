@@ -42,13 +42,11 @@ Deno.serve(async (req) => {
     return errorResponse(404, 'Store user not found');
   }
 
-  const { storeUser } = resolvedMembership;
+  const { shopUser, ownerEmail } = resolvedMembership;
 
-  if (storeUser.status !== 'active') {
+  if (shopUser.status !== 'active') {
     return errorResponse(403, 'User is not active');
   }
-
-  const ownerEmail = storeUser.invited_by ?? storeUser.email;
 
   const { data: ownerProfile, error: ownerError } = await supabaseAdmin
     .from('users')
@@ -76,12 +74,12 @@ Deno.serve(async (req) => {
     return errorResponse(403, 'License expired');
   }
 
-  const resolvedRole = storeUser.role === 'owner' ? 'admin' : storeUser.role;
+  const resolvedRole = shopUser.role === 'owner' ? 'admin' : shopUser.role;
 
   return jsonResponse({
     store_user: {
       role: resolvedRole,
-      status: storeUser.status,
+      status: shopUser.status,
     },
     license: {
       active,

@@ -18,13 +18,13 @@ export class EdgeStoreUsersRepository implements StoreUsersRepository {
   private readonly edgeClient = inject(EdgeClientService);
   private readonly supabaseClient = inject(SupabaseClientService);
 
-  listStoreUsers(domain: string): Observable<StoreUser[]> {
+  listStoreUsers(shopId: string): Observable<StoreUser[]> {
     return from(
       this.supabaseClient.client
-        .from('store_users')
+        .from('shop_users')
         .select(
           `
-          domain,
+          shop_id,
           email,
           invited_by,
           role,
@@ -32,7 +32,7 @@ export class EdgeStoreUsersRepository implements StoreUsersRepository {
           created_at
         `
         )
-        .eq('domain', domain)
+        .eq('shop_id', shopId)
         .order('created_at', { ascending: false })
     ).pipe(
       map(({ data, error }) => {
@@ -44,9 +44,9 @@ export class EdgeStoreUsersRepository implements StoreUsersRepository {
     );
   }
 
-  inviteStoreUser(domain: string, email: string, role: StoreUserRole): Observable<StoreUser> {
+  inviteStoreUser(shopId: string, email: string, role: StoreUserRole): Observable<StoreUser> {
     const request: InviteStoreUserRequest = {
-      domain,
+      shop_id: shopId,
       email,
       role,
     };
@@ -55,7 +55,7 @@ export class EdgeStoreUsersRepository implements StoreUsersRepository {
       .callFunction<InviteStoreUserRequest, InviteStoreUserResponse>('invite_store_user', request)
       .pipe(
         map((response) => ({
-          domain: response.domain,
+          shopId: response.shop_id,
           email: response.email,
           invitedBy: null,
           role: response.role as StoreUserRole,
@@ -64,17 +64,13 @@ export class EdgeStoreUsersRepository implements StoreUsersRepository {
       );
   }
 
-  updateStoreUserStatus(
-    domain: string,
-    email: string,
-    status: StoreUserStatus
-  ): Observable<StoreUser> {
+  updateStoreUserStatus(shopId: string, email: string, status: StoreUserStatus): Observable<StoreUser> {
     if (status !== StoreUserStatus.Removed) {
       throw new Error('Only removal is supported via Edge for now');
     }
 
     const request: RemoveStoreUserRequest = {
-      domain,
+      shop_id: shopId,
       email,
     };
 
@@ -82,7 +78,7 @@ export class EdgeStoreUsersRepository implements StoreUsersRepository {
       .callFunction<RemoveStoreUserRequest, InviteStoreUserResponse>('remove_store_user', request)
       .pipe(
         map((response) => ({
-          domain: response.domain,
+          shopId: response.shop_id,
           email: response.email,
           invitedBy: null,
           role: response.role as StoreUserRole,
@@ -93,7 +89,7 @@ export class EdgeStoreUsersRepository implements StoreUsersRepository {
 
   private mapToStoreUser(row: any): StoreUser {
     return {
-      domain: row.domain,
+      shopId: row.shop_id,
       email: row.email,
       invitedBy: row.invited_by ?? null,
       role: row.role as StoreUserRole,

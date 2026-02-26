@@ -1,28 +1,40 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, from, of, throwError } from 'rxjs';
-import { map, catchError, switchMap } from 'rxjs/operators';
+import { Observable, from, throwError } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
 import { StoresRepository } from '../../repositories/stores.repository';
 import { Store } from '../../models';
 import { SupabaseClientService } from './supabase-client.service';
 import { mapSupabaseErrorToDomainError } from './error-mapper';
 
-type StoreCredentialRow = {
-  domain: string;
-  shopify_domain?: string | null;
-  connected?: boolean;
-  last_validated_at?: string | null;
+type OwnerStoreConnectionRow = {
+  shop_id: string;
+  name: string | null;
+  owner_email: string | null;
+  shopify_domain: string | null;
+  connected: boolean;
+  last_validated_at: string | null;
 };
 
 type OwnerStoreConnectionsResponse = {
-  connections?: StoreCredentialRow[];
+  connections?: OwnerStoreConnectionRow[];
 };
 
-type StoreRow = {
-  domain: string;
+type ShopRow = {
+  id: string;
+  shopify_domain: string;
   name: string;
-  owner_id: string;
+  owner_email: string;
   created_at?: string;
 };
+
+function normalizeShopifyDomain(shopifyDomain: string): string {
+  const raw = shopifyDomain.trim().toLowerCase();
+  return raw.endsWith('.myshopify.com') ? raw : `${raw}.myshopify.com`;
+}
+
+function deriveStoreName(shopifyDomain: string): string {
+  return normalizeShopifyDomain(shopifyDomain).replace(/\.myshopify\.com$/, '');
+}
 
 @Injectable()
 export class SupabaseStoresRepository implements StoresRepository {
@@ -30,182 +42,138 @@ export class SupabaseStoresRepository implements StoresRepository {
 
   listMyStores(): Observable<Store[]> {
     return from(
-      this.supabaseClient.client
-        .from('stores')
-        .select(
-          `
-          domain,
-          name,
-          owner_id,
-          created_at
-        `
-        )
-        .order('created_at', { ascending: false })
+      this.supabaseClient.client.functions.invoke<OwnerStoreConnectionsResponse>(
+        'owner_store_connections_get',
+        {
+          body: {},
+        }
+      )
     ).pipe(
       map(({ data, error }) => {
         if (error) {
           throw mapSupabaseErrorToDomainError(error);
         }
-        return (data || []).map((row) => this.mapToStore(row as StoreRow));
+
+        const rows = (data?.connections ?? []) as OwnerStoreConnectionRow[];
+        return rows.map((row) => this.mapConnectionToStore(row));
       }),
-      switchMap((stores) => this.attachCredentialStatus(stores)),
-      catchError((error) => {
-        return throwError(() => mapSupabaseErrorToDomainError(error));
-      })
+      catchError((error) => throwError(() => mapSupabaseErrorToDomainError(error)))
     );
   }
 
-  getStore(id: string): Observable<Store | null> {
+  getStore(storeId: string): Observable<Store | null> {
+    return this.listMyStores().pipe(
+      map((stores) => stores.find((store) => store.id === storeId) ?? null),
+      catchError((error) => throwError(() => mapSupabaseErrorToDomainError(error)))
+    );
+  }
+
+  createStore(shopifyDomain: string, name: string): Observable<Store> {
+    return from(this.createStoreInternal(shopifyDomain, name)).pipe(
+      catchError((error) => throwError(() => mapSupabaseErrorToDomainError(error)))
+    );
+  }
+
+  updateStore(storeId: string, changes: Partial<Store>): Observable<Store> {
+    const updateData: Record<string, unknown> = {};
+    if (changes.name !== undefined) updateData['name'] = changes.name;
+    if (changes.ownerEmail !== undefined) updateData['owner_email'] = changes.ownerEmail;
+    if (changes.shopifyDomain !== undefined) {
+      updateData['shopify_domain'] = normalizeShopifyDomain(changes.shopifyDomain);
+    }
+
     return from(
       this.supabaseClient.client
-        .from('stores')
-        .select(
-          `
-          domain,
-          name,
-          owner_id,
-          created_at
-        `
-        )
-        .eq('domain', id)
+        .from('shops')
+        .update(updateData)
+        .eq('id', storeId)
+        .select('id, shopify_domain, name, owner_email, created_at')
         .single()
     ).pipe(
       map(({ data, error }) => {
-        if (error) {
-          // 404 is acceptable for getStore
-          if (error.code === 'PGRST116') {
-            return null;
-          }
-          throw mapSupabaseErrorToDomainError(error);
+        if (error || !data) {
+          throw mapSupabaseErrorToDomainError(error ?? new Error('Failed to update store'));
         }
-        return data ? this.mapToStore(data as StoreRow) : null;
+        return this.mapShopRowToStore(data as ShopRow);
       }),
-      switchMap((store) => {
-        if (!store) {
-          return of(null);
-        }
-
-        return this.attachCredentialStatus([store]).pipe(map((stores) => stores[0] ?? null));
-      }),
-      catchError((error) => {
-        return throwError(() => mapSupabaseErrorToDomainError(error));
-      })
+      catchError((error) => throwError(() => mapSupabaseErrorToDomainError(error)))
     );
   }
 
-  createStore(domain: string, name: string): Observable<Store> {
-    return from(this.supabaseClient.getUser()).pipe(
-      switchMap((user) => {
-        if (!user?.email) {
-          throw mapSupabaseErrorToDomainError({ message: 'User email not available' });
-        }
-        return from(
-          this.supabaseClient.client
-            .from('stores')
-            .insert({ domain, name, owner_id: user.email })
-            .select()
-            .single()
-        );
-      }),
-      map(({ data, error }) => {
-        if (error) {
-          throw mapSupabaseErrorToDomainError(error);
-        }
-        return this.mapToStore(data);
-      }),
-      catchError((error) => {
-        return throwError(() => mapSupabaseErrorToDomainError(error));
-      })
-    );
-  }
-
-  updateStore(id: string, changes: Partial<Store>): Observable<Store> {
-    const updateData: any = {};
-    if (changes.name !== undefined) updateData.name = changes.name;
-    if (changes.ownerEmail !== undefined) updateData.owner_id = changes.ownerEmail;
-
-    return from(
-      this.supabaseClient.client.from('stores').update(updateData).eq('domain', id).select().single()
-    ).pipe(
-      map(({ data, error }) => {
-        if (error) {
-          throw mapSupabaseErrorToDomainError(error);
-        }
-        return this.mapToStore(data);
-      }),
-      catchError((error) => {
-        return throwError(() => mapSupabaseErrorToDomainError(error));
-      })
-    );
-  }
-
-  deleteStore(id: string): Observable<void> {
-    return from(this.supabaseClient.client.from('stores').delete().eq('domain', id)).pipe(
+  deleteStore(storeId: string): Observable<void> {
+    return from(this.supabaseClient.client.from('shops').delete().eq('id', storeId)).pipe(
       map(({ error }) => {
         if (error) {
           throw mapSupabaseErrorToDomainError(error);
         }
         return undefined;
       }),
-      catchError((error) => {
-        return throwError(() => mapSupabaseErrorToDomainError(error));
-      })
+      catchError((error) => throwError(() => mapSupabaseErrorToDomainError(error)))
     );
   }
 
-  private mapToStore(row: StoreRow): Store {
+  private async createStoreInternal(shopifyDomain: string, name: string): Promise<Store> {
+    const user = await this.supabaseClient.getUser();
+    const ownerEmail = user?.email?.toLowerCase();
+    if (!ownerEmail) {
+      throw mapSupabaseErrorToDomainError({ message: 'User email not available' });
+    }
+
+    const normalizedShopifyDomain = normalizeShopifyDomain(shopifyDomain);
+    const derivedName = deriveStoreName(normalizedShopifyDomain);
+
+    const { data: shop, error: shopError } = await this.supabaseClient.client
+      .from('shops')
+      .insert({
+        shopify_domain: normalizedShopifyDomain,
+        name: name || derivedName,
+        owner_email: ownerEmail,
+        allowed_domains: [derivedName, normalizedShopifyDomain],
+      })
+      .select('id, shopify_domain, name, owner_email, created_at')
+      .single();
+
+    if (shopError || !shop) {
+      throw mapSupabaseErrorToDomainError(shopError ?? new Error('Failed to create shop'));
+    }
+
+    const { error: shopUserError } = await this.supabaseClient.client.from('shop_users').insert({
+      shop_id: shop.id,
+      email: ownerEmail,
+      role: 'owner',
+      status: 'active',
+      invited_by: null,
+    });
+
+    if (shopUserError) {
+      throw mapSupabaseErrorToDomainError(shopUserError);
+    }
+
+    return this.mapShopRowToStore(shop as ShopRow);
+  }
+
+  private mapShopRowToStore(row: ShopRow): Store {
     return {
-      id: row.domain,
-      domain: row.domain,
+      id: row.id,
+      shopifyDomain: row.shopify_domain,
       name: row.name,
-      ownerEmail: row.owner_id,
+      ownerEmail: row.owner_email,
       createdAt: row.created_at,
       shopifyConnected: false,
-      shopifyDomain: null,
       shopifyLastValidatedAt: null,
     };
   }
 
-  private attachCredentialStatus(stores: Store[]): Observable<Store[]> {
-    if (stores.length === 0) {
-      return of(stores);
-    }
-
-    const domains = [...new Set(stores.map((store) => store.domain))];
-
-    return from(
-      this.supabaseClient.client.functions.invoke<OwnerStoreConnectionsResponse>(
-        'owner_store_connections_get',
-        {
-          body: { domains },
-        }
-      )
-    ).pipe(
-      map(({ data, error }) => {
-        if (error) {
-          // Do not block stores page when connection status lookup fails.
-          return stores;
-        }
-
-        const credentialsByDomain = new Map<string, StoreCredentialRow>();
-        for (const row of (data?.connections || []) as StoreCredentialRow[]) {
-          credentialsByDomain.set(row.domain, row);
-        }
-
-        return stores.map((store) => this.applyCredentialState(store, credentialsByDomain.get(store.domain)));
-      }),
-      catchError(() => of(stores))
-    );
-  }
-
-  private applyCredentialState(store: Store, credentials?: StoreCredentialRow): Store {
-    const connected = credentials?.connected === true;
-
+  private mapConnectionToStore(row: OwnerStoreConnectionRow): Store {
+    const shopifyDomain = row.shopify_domain ? normalizeShopifyDomain(row.shopify_domain) : '';
     return {
-      ...store,
-      shopifyConnected: connected,
-      shopifyDomain: credentials?.shopify_domain ?? null,
-      shopifyLastValidatedAt: credentials?.last_validated_at ?? null,
+      id: row.shop_id,
+      shopifyDomain,
+      name: row.name || deriveStoreName(shopifyDomain || row.shop_id),
+      ownerEmail: row.owner_email ?? '',
+      shopifyConnected: row.connected === true,
+      shopifyLastValidatedAt: row.last_validated_at,
+      createdAt: undefined,
     };
   }
 }

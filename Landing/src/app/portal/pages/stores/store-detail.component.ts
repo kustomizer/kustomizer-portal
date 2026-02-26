@@ -34,8 +34,8 @@ import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../share
               <p>{{ store.name }}</p>
             </div>
             <div class="info-item">
-              <label>Domain</label>
-              <p>{{ store.domain }}</p>
+              <label>Shopify Domain</label>
+              <p>{{ store.shopifyDomain }}</p>
             </div>
             <div class="info-item">
               <label>Created</label>
@@ -63,17 +63,9 @@ import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../share
                   type="button"
                   class="btn-secondary"
                   (click)="reconnectStore(store)"
-                  [disabled]="!shopifyInstallUrl || syncingStores"
+                  [disabled]="!shopifyInstallUrl"
                 >
                   Reconnect on Shopify
-                </button>
-                <button
-                  type="button"
-                  class="btn-secondary"
-                  (click)="syncLinkedStores()"
-                  [disabled]="syncingStores"
-                >
-                  {{ syncingStores ? 'Refreshing...' : 'Refresh linked stores' }}
                 </button>
               </div>
             </div>
@@ -83,7 +75,7 @@ import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../share
             Add a Shopify Admin API access token. The token is stored encrypted and will not be shown again.
           </p>
 
-          <form class="shopify-form" [formGroup]="shopifyForm" (ngSubmit)="saveShopify(store.domain)">
+          <form class="shopify-form" [formGroup]="shopifyForm" (ngSubmit)="saveShopify(store.id)">
             <div class="form-grid">
               <div class="form-group">
                 <label for="shopifyDomain">Shopify domain</label>
@@ -353,7 +345,6 @@ export class StoreDetailComponent {
   savingShopify = false;
   shopifyError = '';
   shopifySuccess = '';
-  syncingStores = false;
 
   readonly shopifyInstallUrl = resolveShopifyInstallUrl(environment.publicShopifyInstallUrl);
 
@@ -391,7 +382,7 @@ export class StoreDetailComponent {
     return active;
   }
 
-  saveShopify(domain: string): void {
+  saveShopify(shopId: string): void {
     if (this.shopifyForm.invalid || this.savingShopify) {
       return;
     }
@@ -405,7 +396,7 @@ export class StoreDetailComponent {
     const { shopifyDomain, accessToken } = this.shopifyForm.getRawValue();
 
     this.shopifyCredentials
-      .upsertCredentials(domain, shopifyDomain ?? '', accessToken ?? '')
+      .upsertCredentials(shopId, shopifyDomain ?? '', accessToken ?? '')
       .pipe(
         finalize(() => {
           this.savingShopify = false;
@@ -416,6 +407,7 @@ export class StoreDetailComponent {
         next: (result) => {
           this.shopifySuccess = `Connected to ${result.shopifyDomain}`;
           this.shopifyForm.patchValue({ accessToken: '' });
+          this.storeContext.loadStores();
           this.cdr.detectChanges();
         },
         error: (error: Error) => {
@@ -430,44 +422,11 @@ export class StoreDetailComponent {
       return;
     }
 
-    const url = buildShopifyInstallUrl(this.shopifyInstallUrl, store.shopifyDomain ?? store.domain);
+    const url = buildShopifyInstallUrl(this.shopifyInstallUrl, store.shopifyDomain);
     if (!url) {
       return;
     }
 
     window.location.assign(url);
-  }
-
-  syncLinkedStores(): void {
-    if (this.syncingStores) {
-      return;
-    }
-
-    this.syncingStores = true;
-    this.shopifyError = '';
-    this.shopifySuccess = '';
-
-    this.storeContext
-      .syncOwnerStoresFromLegacy()
-      .pipe(
-        finalize(() => {
-          this.syncingStores = false;
-          this.cdr.detectChanges();
-        })
-      )
-      .subscribe({
-        next: (result) => {
-          this.shopifySuccess =
-            result.synced > 0
-              ? `${result.synced} store${result.synced === 1 ? '' : 's'} refreshed from Shopify.`
-              : 'No linked owner stores found yet.';
-          this.storeContext.loadStores();
-          this.cdr.detectChanges();
-        },
-        error: (error: Error) => {
-          this.shopifyError = error?.message || 'Could not refresh linked stores.';
-          this.cdr.detectChanges();
-        },
-      });
   }
 }

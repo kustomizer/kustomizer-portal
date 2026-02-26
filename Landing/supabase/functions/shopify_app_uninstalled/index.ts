@@ -106,10 +106,10 @@ Deno.serve(async (req) => {
   const supabaseAdmin = getServiceClient();
 
   const { data, error } = await supabaseAdmin
-    .from('store_shopify_credentials')
+    .from('shop_credentials')
     .delete()
     .eq('shopify_domain', shopifyDomain)
-    .select('domain');
+    .select('shop_id, shopify_domain');
 
   if (error) {
     return errorResponse(500, error.message || 'Failed to delete Shopify credentials');
@@ -118,6 +118,6 @@ Deno.serve(async (req) => {
   return jsonResponse({
     ok: true,
     shopify_domain: shopifyDomain,
-    revoked_domains: (data ?? []).map((row) => String(row.domain)),
+    revoked_shop_ids: (data ?? []).map((row) => String(row.shop_id)),
   });
 });

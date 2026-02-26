@@ -357,7 +357,7 @@ async function finalizeOauth(
     body = null;
   }
 
-  const parsed = body as { reason?: unknown; domain?: unknown } | null;
+  const parsed = body as { reason?: unknown; domain?: unknown; shopify_domain?: unknown } | null;
 
   if (!response.ok) {
     return {
@@ -368,7 +368,12 @@ async function finalizeOauth(
 
   return {
     ok: true,
-    domain: typeof parsed?.domain === 'string' ? parsed.domain : null,
+    domain:
+      typeof parsed?.shopify_domain === 'string'
+        ? parsed.shopify_domain
+        : typeof parsed?.domain === 'string'
+          ? parsed.domain
+          : null,
   };
 }
 

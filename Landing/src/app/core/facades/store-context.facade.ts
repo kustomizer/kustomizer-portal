@@ -4,7 +4,6 @@ import { map, switchMap, tap, catchError, shareReplay } from 'rxjs/operators';
 import { Store } from '../models';
 import { Tier } from '../types/enums';
 import { STORES_REPOSITORY, BOOTSTRAP_REPOSITORY } from '../repositories';
-import { SyncOwnerStoresResponse } from '../repositories/bootstrap.repository';
 import { Loadable, toLoadable } from '../../shared/utils/loadable';
 import { StorageService } from '../services/storage.service';
 
@@ -16,7 +15,7 @@ export interface StoreContextViewModel {
   error?: string;
 }
 
-const ACTIVE_STORE_KEY = 'active_store_domain';
+const ACTIVE_STORE_KEY = 'active_shop_id';
 
 @Injectable({ providedIn: 'root' })
 export class StoreContextFacade {
@@ -89,25 +88,13 @@ export class StoreContextFacade {
     return this.bootstrapRepo.bootstrapOwnerStore(storeName, domain, tier).pipe(
       tap((response) => {
         // Set the newly created store as active
-        this.setActiveStore(response.storeDomain);
+        this.setActiveStore(response.shopId);
         // Refresh stores list
         this.refreshTrigger$.next();
       }),
       map(() => undefined),
       catchError((error) => {
         console.error('Bootstrap failed:', error);
-        return throwError(() => error);
-      })
-    );
-  }
-
-  syncOwnerStoresFromLegacy(): Observable<SyncOwnerStoresResponse> {
-    return this.bootstrapRepo.syncOwnerStoresFromLegacy().pipe(
-      tap(() => {
-        this.refreshTrigger$.next();
-      }),
-      map((response) => response),
-      catchError((error) => {
         return throwError(() => error);
       })
     );

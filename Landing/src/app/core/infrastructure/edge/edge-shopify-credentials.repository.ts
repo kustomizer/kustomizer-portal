@@ -15,9 +15,13 @@ import { EdgeClientService } from './edge-client.service';
 export class EdgeShopifyCredentialsRepository implements ShopifyCredentialsRepository {
   private readonly edgeClient = inject(EdgeClientService);
 
-  upsertCredentials(domain: string, shopifyDomain: string, accessToken: string): Observable<ShopifyCredentialsUpsertResult> {
+  upsertCredentials(
+    shopId: string,
+    shopifyDomain: string,
+    accessToken: string
+  ): Observable<ShopifyCredentialsUpsertResult> {
     const request: OwnerShopifyCredentialsUpsertRequest = {
-      domain,
+      shop_id: shopId,
       shopify_domain: shopifyDomain,
       access_token: accessToken,
     };

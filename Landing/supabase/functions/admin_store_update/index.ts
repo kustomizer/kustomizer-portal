@@ -8,9 +8,9 @@ import {
 } from '../_shared/edge.ts';
 
 type AdminStoreUpdateRequest = {
-  domain?: string;
+  shop_id?: string;
   name?: string;
-  owner_id?: string;
+  owner_email?: string;
 };
 
 Deno.serve(async (req) => {
@@ -29,9 +29,9 @@ Deno.serve(async (req) => {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const domain = payload.domain;
-  if (!domain) {
-    return errorResponse(422, 'domain is required');
+  const shopId = payload.shop_id;
+  if (!shopId) {
+    return errorResponse(422, 'shop_id is required');
   }
 
   const user = await getUser(req);
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
   const updateData: Record<string, unknown> = {};
   if (payload.name !== undefined) updateData.name = payload.name;
-  if (payload.owner_id !== undefined) updateData.owner_id = payload.owner_id;
+  if (payload.owner_email !== undefined) updateData.owner_email = payload.owner_email;
 
   if (Object.keys(updateData).length === 0) {
     return errorResponse(422, 'No fields to update');
@@ -53,16 +53,24 @@ Deno.serve(async (req) => {
 
   const supabaseAdmin = getServiceClient();
 
-  const { data: store, error } = await supabaseAdmin
-    .from('stores')
+  const { data: shop, error } = await supabaseAdmin
+    .from('shops')
     .update(updateData)
-    .eq('domain', domain)
-    .select('domain, name, owner_id, created_at')
+    .eq('id', shopId)
+    .select('id, shopify_domain, name, owner_email, created_at')
     .single();
 
-  if (error || !store) {
-    return errorResponse(500, error?.message || 'Failed to update store');
+  if (error || !shop) {
+    return errorResponse(500, error?.message || 'Failed to update shop');
   }
 
-  return jsonResponse({ store });
+  return jsonResponse({
+    store: {
+      id: shop.id,
+      shopify_domain: shop.shopify_domain,
+      name: shop.name,
+      owner_email: shop.owner_email,
+      created_at: shop.created_at,
+    },
+  });
 });

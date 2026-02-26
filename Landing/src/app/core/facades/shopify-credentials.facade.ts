@@ -8,10 +8,10 @@ export class ShopifyCredentialsFacade {
   private readonly repo = inject(SHOPIFY_CREDENTIALS_REPOSITORY);
 
   upsertCredentials(
-    domain: string,
+    shopId: string,
     shopifyDomain: string,
     accessToken: string
   ): Observable<ShopifyCredentialsUpsertResult> {
-    return this.repo.upsertCredentials(domain, shopifyDomain, accessToken);
+    return this.repo.upsertCredentials(shopId, shopifyDomain, accessToken);
   }
 }

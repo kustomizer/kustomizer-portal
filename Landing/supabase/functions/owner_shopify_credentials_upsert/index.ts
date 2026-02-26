@@ -5,11 +5,11 @@ import {
   getUser,
   jsonResponse,
 } from '../_shared/edge.ts';
-import { normalizeDomainInput, normalizeShopifyDomainInput } from '../_shared/store-access.ts';
+import { normalizeShopifyDomainInput } from '../_shared/store-access.ts';
 import { encryptShopifyToken } from '../_shared/shopify-token-crypto.ts';
 
 type OwnerShopifyCredentialsUpsertRequest = {
-  domain?: string;
+  shop_id?: string;
   // Accept both names to ease integrations
   shopify_domain?: string;
   shop?: string;
@@ -45,8 +45,6 @@ async function shopifyGraphQL(shopifyDomain: string, accessToken: string, query:
 }
 
 async function validateCredentials(shopifyDomain: string, accessToken: string): Promise<{ ok: boolean }> {
-  // Validate using an operation that requires read_metaobjects, which matches
-  // the minimal scope needed by editor reads.
   const query = `query ValidateToken($handle: MetaobjectHandleInput!) {
     metaobjectByHandle(handle: $handle) {
       id
@@ -73,7 +71,6 @@ async function validateCredentials(shopifyDomain: string, accessToken: string): 
   return { ok: true };
 }
 
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -90,46 +87,45 @@ Deno.serve(async (req) => {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const domain = payload.domain ? normalizeDomainInput(payload.domain) : '';
+  const shopId = payload.shop_id?.trim();
   const shopifyDomain = payload.shopify_domain ?? payload.shop;
   const normalizedShopifyDomain = shopifyDomain ? normalizeShopifyDomainInput(shopifyDomain) : '';
   const accessToken = (payload.access_token ?? payload.accessToken)?.trim();
 
-  if (!domain || !normalizedShopifyDomain || !accessToken) {
+  if (!shopId || !normalizedShopifyDomain || !accessToken) {
     return errorResponse(
       422,
-      'domain, shopify_domain (or shop), and access_token (or accessToken) are required'
+      'shop_id, shopify_domain (or shop), and access_token (or accessToken) are required'
     );
   }
 
   const user = await getUser(req);
-  if (!user?.email) {
+  const userEmail = user?.email?.trim().toLowerCase();
+  if (!userEmail) {
     return errorResponse(401, 'Unauthorized');
   }
 
   const supabaseAdmin = getServiceClient();
 
-  const { data: store, error: storeError } = await supabaseAdmin
-    .from('stores')
-    .select('owner_id')
-    .eq('domain', domain)
+  const { data: shop, error: shopError } = await supabaseAdmin
+    .from('shops')
+    .select('id, owner_email')
+    .eq('id', shopId)
     .maybeSingle();
 
-  if (storeError || !store) {
-    return errorResponse(404, 'Store not found');
+  if (shopError || !shop) {
+    return errorResponse(404, 'Shop not found');
   }
 
-  if (store.owner_id !== user.email) {
+  const ownerEmail = String(shop.owner_email ?? '').trim().toLowerCase();
+  if (!ownerEmail || ownerEmail !== userEmail) {
     return errorResponse(403, 'Only owners can set Shopify credentials');
   }
 
-  // Verify credentials against Shopify and extract a canonical domain if available.
   const credentialCheck = await validateCredentials(normalizedShopifyDomain, accessToken);
   if (!credentialCheck.ok) {
     return errorResponse(422, 'Invalid Shopify credentials');
   }
-
-  const canonicalShopifyDomain = normalizedShopifyDomain;
 
   let encrypted;
   try {
@@ -140,14 +136,19 @@ Deno.serve(async (req) => {
 
   const now = new Date().toISOString();
 
-  const { error: upsertError } = await supabaseAdmin.from('store_shopify_credentials').upsert({
-    domain,
-    shopify_domain: canonicalShopifyDomain,
-    access_token_ciphertext: encrypted.ciphertextB64,
-    access_token_iv: encrypted.ivB64,
-    updated_at: now,
-    last_validated_at: now,
-  });
+  const { error: upsertError } = await supabaseAdmin
+    .from('shop_credentials')
+    .upsert(
+      {
+        shop_id: shopId,
+        shopify_domain: normalizedShopifyDomain,
+        access_token_ciphertext: encrypted.ciphertextB64,
+        access_token_iv: encrypted.ivB64,
+        updated_at: now,
+        last_validated_at: now,
+      },
+      { onConflict: 'shop_id' }
+    );
 
   if (upsertError) {
     return errorResponse(500, upsertError.message || 'Failed to save Shopify credentials');
@@ -155,7 +156,8 @@ Deno.serve(async (req) => {
 
   return jsonResponse({
     ok: true,
-    shopify_domain: canonicalShopifyDomain,
+    shop_id: shopId,
+    shopify_domain: normalizedShopifyDomain,
     last_validated_at: now,
   });
 });

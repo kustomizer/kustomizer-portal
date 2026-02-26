@@ -1,35 +1,25 @@
 // Bootstrap Owner Store
 export interface BootstrapOwnerStoreRequest {
   store_name: string;
-  domain: string;
+  shopify_domain: string;
   tier: string;
 }
 
 export interface BootstrapOwnerStoreResponse {
-  store_domain: string;
+  shop_id: string;
+  shopify_domain: string;
   license_id: string;
-}
-
-// Sync Owner Stores From Legacy
-export interface SyncOwnerStoresFromLegacyResponse {
-  synced: number;
-  credentials_synced?: number;
-  stores: Array<{
-    domain: string;
-    shopify_domain: string | null;
-    source: 'legacy_store_users' | 'legacy_shops';
-  }>;
 }
 
 // Invite Store User
 export interface InviteStoreUserRequest {
-  domain: string;
+  shop_id: string;
   email: string;
   role: string;
 }
 
 export interface InviteStoreUserResponse {
-  domain: string;
+  shop_id: string;
   email: string;
   role: string;
   status: string;
@@ -37,7 +27,7 @@ export interface InviteStoreUserResponse {
 
 // Remove Store User
 export interface RemoveStoreUserRequest {
-  domain: string;
+  shop_id: string;
   email: string;
 }
 
@@ -62,24 +52,26 @@ export interface KustomizerAuthResponse {
 // Admin - List Stores
 export interface AdminStoresListResponse {
   stores: Array<{
-    domain: string;
+    id: string;
+    shopify_domain: string;
     name: string;
     created_at: string;
-    owner_id: string;
+    owner_email: string;
   }>;
 }
 
 // Admin - Get Store
 export interface AdminStoreGetRequest {
-  domain: string;
+  shop_id: string;
 }
 
 export interface AdminStoreGetResponse {
   store: {
-    domain: string;
+    id: string;
+    shopify_domain: string;
     name: string;
     created_at: string;
-    owner_id: string;
+    owner_email: string;
   };
   license: {
     id: string;
@@ -88,6 +80,7 @@ export interface AdminStoreGetResponse {
     created_at: string;
   } | null;
   store_users: Array<{
+    shop_id: string;
     email: string;
     invited_by?: string | null;
     role: string;
@@ -98,9 +91,9 @@ export interface AdminStoreGetResponse {
 
 // Admin - Update Store
 export interface AdminStoreUpdateRequest {
-  domain: string;
+  shop_id: string;
   name?: string;
-  owner_id?: string;
+  owner_email?: string;
 }
 
 // Admin - Update License
@@ -112,7 +105,7 @@ export interface AdminLicenseUpdateRequest {
 
 // Owner - Shopify Credentials Upsert
 export interface OwnerShopifyCredentialsUpsertRequest {
-  domain: string;
+  shop_id: string;
   shopify_domain?: string;
   shop?: string;
   access_token?: string;
@@ -121,6 +114,7 @@ export interface OwnerShopifyCredentialsUpsertRequest {
 
 export interface OwnerShopifyCredentialsUpsertResponse {
   ok: boolean;
+  shop_id: string;
   shopify_domain: string;
   last_validated_at: string | null;
 }

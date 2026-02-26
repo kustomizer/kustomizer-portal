@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { finalize } from 'rxjs/operators';
 import { environment } from '../../../../environment/environment';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
 import { Store } from '../../../core/models';
@@ -31,27 +30,11 @@ import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../share
         </p>
 
         <div class="empty-actions">
-          <button
-            type="button"
-            class="btn-primary"
-            (click)="openShopifyInstall()"
-            [disabled]="!shopifyInstallUrl || syncingStores"
-          >
+          <button type="button" class="btn-primary" (click)="openShopifyInstall()" [disabled]="!shopifyInstallUrl">
             Install on Shopify
-          </button>
-          <button
-            type="button"
-            class="btn-secondary"
-            (click)="syncLinkedStores()"
-            [disabled]="syncingStores"
-          >
-            {{ syncingStores ? 'Refreshing...' : 'Refresh linked stores' }}
           </button>
           <a routerLink="/app/install" class="btn-link">See integration guide</a>
         </div>
-
-        <p class="muted error" *ngIf="syncError">{{ syncError }}</p>
-        <p class="muted success" *ngIf="syncSuccess">{{ syncSuccess }}</p>
 
         <p class="muted" *ngIf="!shopifyInstallUrl">
           Shopify install URL is not configured yet. Contact support.
@@ -59,11 +42,7 @@ import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../share
       </section>
 
       <div *ngIf="vm.state === 'ready' && vm.data" class="grid">
-        <div
-          class="card"
-          *ngFor="let store of vm.data.stores"
-          [class.active]="store.id === vm.data.activeStore?.id"
-        >
+        <div class="card" *ngFor="let store of vm.data.stores" [class.active]="store.id === vm.data.activeStore?.id">
           <div class="store-header">
             <h3>{{ store.name }}</h3>
             <div class="badges">
@@ -74,8 +53,7 @@ import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../share
             </div>
           </div>
           <div class="meta">
-            <p class="muted">{{ store.domain }}</p>
-            <p class="muted" *ngIf="store.shopifyDomain">Shopify: {{ store.shopifyDomain }}</p>
+            <p class="muted">{{ store.shopifyDomain }}</p>
             <p class="muted">Created {{ store.createdAt | date: 'mediumDate' }}</p>
           </div>
           <div class="actions">
@@ -91,16 +69,8 @@ import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../share
           </div>
 
           <div class="reconnect-actions" *ngIf="!store.shopifyConnected">
-            <button
-              type="button"
-              class="btn-secondary"
-              (click)="reconnectStore(store)"
-              [disabled]="!shopifyInstallUrl || syncingStores"
-            >
+            <button type="button" class="btn-secondary" (click)="reconnectStore(store)" [disabled]="!shopifyInstallUrl">
               Reconnect on Shopify
-            </button>
-            <button type="button" class="btn-secondary" (click)="syncLinkedStores()" [disabled]="syncingStores">
-              {{ syncingStores ? 'Refreshing...' : 'Refresh linked stores' }}
             </button>
           </div>
         </div>
@@ -152,21 +122,6 @@ import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../share
       }
 
       .btn-primary:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      .btn-secondary {
-        padding: 0.85rem 1rem;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        background: transparent;
-        color: var(--foreground);
-        font-weight: 600;
-        cursor: pointer;
-      }
-
-      .btn-secondary:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
@@ -287,14 +242,6 @@ import { buildShopifyInstallUrl, resolveShopifyInstallUrl } from '../../../share
         font-size: 0.85rem;
         margin: 0;
       }
-
-      .muted.error {
-        color: var(--danger);
-      }
-
-      .muted.success {
-        color: #10b981;
-      }
     `,
   ],
 })
@@ -303,10 +250,6 @@ export class StoreListComponent {
 
   readonly vm$ = this.storeContext.vm$;
   readonly shopifyInstallUrl = resolveShopifyInstallUrl(environment.publicShopifyInstallUrl);
-
-  syncingStores = false;
-  syncError = '';
-  syncSuccess = '';
 
   setActiveStore(storeId: string): void {
     this.storeContext.setActiveStore(storeId);
@@ -330,47 +273,11 @@ export class StoreListComponent {
       return;
     }
 
-    const url = buildShopifyInstallUrl(this.shopifyInstallUrl, store.shopifyDomain ?? store.domain);
+    const url = buildShopifyInstallUrl(this.shopifyInstallUrl, store.shopifyDomain);
     if (!url) {
       return;
     }
 
     window.location.assign(url);
-  }
-
-  syncLinkedStores(): void {
-    if (this.syncingStores) {
-      return;
-    }
-
-    this.syncingStores = true;
-    this.syncError = '';
-    this.syncSuccess = '';
-
-    this.storeContext
-      .syncOwnerStoresFromLegacy()
-      .pipe(
-        finalize(() => {
-          this.syncingStores = false;
-        })
-      )
-      .subscribe({
-        next: (result) => {
-          const syncedCount = result.synced;
-          const credentialsSynced = result.credentialsSynced ?? 0;
-
-          this.syncSuccess =
-            syncedCount > 0
-              ? `${syncedCount} store${syncedCount === 1 ? '' : 's'} imported from Shopify${
-                  credentialsSynced > 0
-                    ? ` (${credentialsSynced} credential${credentialsSynced === 1 ? '' : 's'} synced)`
-                    : ''
-                }.`
-              : 'No linked owner stores found yet. Finish install in Shopify and retry.';
-        },
-        error: (error: Error) => {
-          this.syncError = error?.message || 'Could not refresh linked stores.';
-        },
-      });
   }
 }

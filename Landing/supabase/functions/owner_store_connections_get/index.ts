@@ -5,16 +5,36 @@ import {
   getUser,
   jsonResponse,
 } from '../_shared/edge.ts';
-import { normalizeDomainInput } from '../_shared/store-access.ts';
 
 type OwnerStoreConnectionsGetRequest = {
-  domains?: string[];
+  shop_ids?: string[];
 };
 
 type StoreConnectionRow = {
-  domain: string;
+  shop_id: string;
+  name: string | null;
+  owner_email: string | null;
   shopify_domain: string | null;
   connected: boolean;
+  last_validated_at: string | null;
+};
+
+type ShopMembershipRow = {
+  shop_id: string;
+};
+
+type ShopRow = {
+  id: string;
+  name: string | null;
+  owner_email: string | null;
+  shopify_domain: string | null;
+};
+
+type CredentialRow = {
+  shop_id: string;
+  shopify_domain: string | null;
+  access_token_ciphertext: string | null;
+  access_token_iv: string | null;
   last_validated_at: string | null;
 };
 
@@ -22,11 +42,12 @@ function asString(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
   }
+
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function asDomainArray(value: unknown): string[] {
+function asShopIdArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -34,29 +55,16 @@ function asDomainArray(value: unknown): string[] {
   const normalized: string[] = [];
 
   for (const item of value) {
-    const domain = asString(item);
-    if (!domain) {
+    const shopId = asString(item);
+    if (!shopId) {
       continue;
     }
 
-    normalized.push(normalizeDomainInput(domain));
+    normalized.push(shopId);
   }
 
   return [...new Set(normalized)];
 }
-
-type CredentialRow = {
-  domain: string;
-  shopify_domain: string | null;
-  access_token_ciphertext: string | null;
-  access_token_iv: string | null;
-  last_validated_at: string | null;
-};
-
-type LegacyStoreRow = {
-  domain: string;
-  shopify_domain: string | null;
-};
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -84,73 +92,75 @@ Deno.serve(async (req) => {
   const supabaseAdmin = getServiceClient();
 
   const { data: memberships, error: membershipError } = await supabaseAdmin
-    .from('store_users')
-    .select('domain, status')
+    .from('shop_users')
+    .select('shop_id')
     .eq('email', userEmail)
     .eq('status', 'active');
 
   if (membershipError) {
-    return errorResponse(500, membershipError.message || 'Failed to load store memberships');
+    return errorResponse(500, membershipError.message || 'Failed to load shop memberships');
   }
 
-  const authorizedDomains = new Set(
-    (memberships ?? [])
-      .map((row) => asString((row as { domain?: unknown }).domain))
-      .filter((domain): domain is string => !!domain)
-      .map((domain) => normalizeDomainInput(domain))
+  const authorizedShopIds = new Set(
+    ((memberships ?? []) as ShopMembershipRow[])
+      .map((row) => asString(row.shop_id))
+      .filter((shopId): shopId is string => !!shopId)
   );
 
-  const requestedDomains = asDomainArray(payload.domains);
+  const requestedShopIds = asShopIdArray(payload.shop_ids);
 
-  const targetDomains =
-    requestedDomains.length > 0
-      ? requestedDomains.filter((domain) => authorizedDomains.has(domain))
-      : Array.from(authorizedDomains);
+  const targetShopIds =
+    requestedShopIds.length > 0
+      ? requestedShopIds.filter((shopId) => authorizedShopIds.has(shopId))
+      : Array.from(authorizedShopIds);
 
-  if (targetDomains.length === 0) {
+  if (targetShopIds.length === 0) {
     return jsonResponse({ connections: [] });
   }
 
+  const { data: shops, error: shopsError } = await supabaseAdmin
+    .from('shops')
+    .select('id, name, owner_email, shopify_domain')
+    .in('id', targetShopIds);
+
+  if (shopsError) {
+    return errorResponse(500, shopsError.message || 'Failed to load shops');
+  }
+
   const { data: credentialRows, error: credentialError } = await supabaseAdmin
-    .from('store_shopify_credentials')
-    .select('domain, shopify_domain, access_token_ciphertext, access_token_iv, last_validated_at')
-    .in('domain', targetDomains);
+    .from('shop_credentials')
+    .select('shop_id, shopify_domain, access_token_ciphertext, access_token_iv, last_validated_at')
+    .in('shop_id', targetShopIds);
 
   if (credentialError) {
-    return errorResponse(500, credentialError.message || 'Failed to load store credentials');
+    return errorResponse(500, credentialError.message || 'Failed to load shop credentials');
   }
 
-  const { data: legacyRows, error: legacyError } = await supabaseAdmin
-    .from('v_legacy_stores')
-    .select('domain, shopify_domain')
-    .in('domain', targetDomains);
-
-  if (legacyError) {
-    return errorResponse(500, legacyError.message || 'Failed to load legacy store mappings');
+  const shopsById = new Map<string, ShopRow>();
+  for (const row of (shops ?? []) as ShopRow[]) {
+    shopsById.set(row.id, row);
   }
 
-  const credentialsByDomain = new Map<string, CredentialRow>();
+  const credentialsByShopId = new Map<string, CredentialRow>();
   for (const row of (credentialRows ?? []) as CredentialRow[]) {
-    credentialsByDomain.set(normalizeDomainInput(row.domain), row);
+    credentialsByShopId.set(row.shop_id, row);
   }
 
-  const legacyByDomain = new Map<string, LegacyStoreRow>();
-  for (const row of (legacyRows ?? []) as LegacyStoreRow[]) {
-    legacyByDomain.set(normalizeDomainInput(row.domain), row);
-  }
-
-  const connections: StoreConnectionRow[] = targetDomains.map((domain) => {
-    const credential = credentialsByDomain.get(domain);
-    const legacy = legacyByDomain.get(domain);
+  const connections: StoreConnectionRow[] = targetShopIds.map((shopId) => {
+    const shop = shopsById.get(shopId);
+    const credential = credentialsByShopId.get(shopId);
 
     const hasCiphertext =
       typeof credential?.access_token_ciphertext === 'string' &&
       credential.access_token_ciphertext.length > 0;
-    const hasIv = typeof credential?.access_token_iv === 'string' && credential.access_token_iv.length > 0;
+    const hasIv =
+      typeof credential?.access_token_iv === 'string' && credential.access_token_iv.length > 0;
 
     return {
-      domain,
-      shopify_domain: credential?.shopify_domain ?? legacy?.shopify_domain ?? null,
+      shop_id: shopId,
+      name: shop?.name ?? null,
+      owner_email: shop?.owner_email ?? null,
+      shopify_domain: credential?.shopify_domain ?? shop?.shopify_domain ?? null,
       connected: hasCiphertext && hasIv,
       last_validated_at: credential?.last_validated_at ?? null,
     };

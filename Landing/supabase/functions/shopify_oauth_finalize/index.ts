@@ -12,13 +12,18 @@ type ShopifyOAuthFinalizeRequest = {
   shop?: string;
   access_token?: string;
   accessToken?: string;
-  domain?: string;
   owner_email?: string;
+  store_name?: string;
+  name?: string;
+  domain?: string;
 };
 
-type LegacyShopRow = {
-  owner_email: string | null;
-  allowed_domains: string[] | null;
+type ShopRow = {
+  id: string;
+  name: string;
+  shopify_domain: string;
+  owner_email: string;
+  allowed_domains: string[];
 };
 
 const SHOPIFY_API_VERSION = Deno.env.get('SHOPIFY_API_VERSION') ?? '2024-10';
@@ -44,25 +49,32 @@ function asStringArray(value: unknown): string[] {
 
   return value
     .map((item) => asString(item))
-    .filter((item): item is string => !!item)
-    .map((item) => normalizeDomainInput(item));
+    .filter((item): item is string => !!item);
+}
+
+function dedupeStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function deriveDomainFromShopifyDomain(shopifyDomain: string): string {
   return normalizeDomainInput(shopifyDomain.replace(/\.myshopify\.com$/, ''));
 }
 
-function resolveDomainFromAllowedDomains(allowedDomains: string[], shopifyDomain: string): string {
-  const preferred = allowedDomains.find((domain) => !domain.endsWith('.myshopify.com'));
-  if (preferred) {
-    return preferred;
+function buildAllowedDomains(shopifyDomain: string, explicitDomain: string | null, existing: string[]): string[] {
+  const derivedDomain = deriveDomainFromShopifyDomain(shopifyDomain);
+  const normalizedExplicit = explicitDomain ? normalizeDomainInput(explicitDomain) : null;
+
+  const candidates = [
+    ...existing.map((domain) => normalizeDomainInput(domain)),
+    derivedDomain,
+    shopifyDomain,
+  ];
+
+  if (normalizedExplicit) {
+    candidates.push(normalizedExplicit);
   }
 
-  if (allowedDomains.length > 0) {
-    return allowedDomains[0];
-  }
-
-  return deriveDomainFromShopifyDomain(shopifyDomain);
+  return dedupeStrings(candidates.filter((domain) => domain.length > 0));
 }
 
 async function shopifyGraphQL(shopifyDomain: string, accessToken: string, query: string, variables?: unknown) {
@@ -167,80 +179,95 @@ async function ensureUserLicense(supabaseAdmin: ReturnType<typeof getServiceClie
   return license.license_id as string;
 }
 
-async function resolveLegacyShop(
+async function findShopByShopifyDomain(
   supabaseAdmin: ReturnType<typeof getServiceClient>,
   shopifyDomain: string
-): Promise<{ ownerEmail: string | null; domain: string | null }> {
+): Promise<ShopRow | null> {
   const { data, error } = await supabaseAdmin
     .from('shops')
-    .select('owner_email, allowed_domains')
+    .select('id, name, shopify_domain, owner_email, allowed_domains')
     .ilike('shopify_domain', shopifyDomain)
-    .maybeSingle();
-
-  if (error || !data) {
-    return { ownerEmail: null, domain: null };
-  }
-
-  const row = data as LegacyShopRow;
-  const allowedDomains = asStringArray(row.allowed_domains);
-
-  return {
-    ownerEmail: asLowercaseEmail(row.owner_email),
-    domain: resolveDomainFromAllowedDomains(allowedDomains, shopifyDomain),
-  };
-}
-
-async function getExistingStoreOwnerByDomain(
-  supabaseAdmin: ReturnType<typeof getServiceClient>,
-  domain: string
-): Promise<string | null> {
-  const { data, error } = await supabaseAdmin
-    .from('stores')
-    .select('owner_id')
-    .eq('domain', domain)
     .maybeSingle();
 
   if (error || !data) {
     return null;
   }
 
-  return asLowercaseEmail((data as { owner_id?: unknown }).owner_id);
+  return {
+    id: String(data.id),
+    name: String(data.name ?? ''),
+    shopify_domain: normalizeShopifyDomainInput(String(data.shopify_domain ?? shopifyDomain)),
+    owner_email: String(data.owner_email ?? '').toLowerCase(),
+    allowed_domains: asStringArray(data.allowed_domains),
+  };
 }
 
-async function upsertOwnerStore(
+async function upsertShop(
   supabaseAdmin: ReturnType<typeof getServiceClient>,
-  email: string,
-  domain: string
-) {
-  const normalizedDomain = normalizeDomainInput(domain);
+  params: {
+    shopifyDomain: string;
+    ownerEmail: string;
+    explicitDomain: string | null;
+    storeName: string | null;
+  }
+): Promise<{ shopId: string; ownerEmail: string }> {
+  const existing = await findShopByShopifyDomain(supabaseAdmin, params.shopifyDomain);
+  const defaultName = deriveDomainFromShopifyDomain(params.shopifyDomain);
+  const desiredName = params.storeName ?? existing?.name ?? defaultName;
 
-  const { error: storeError } = await supabaseAdmin.from('stores').upsert(
-    {
-      domain: normalizedDomain,
-      name: normalizedDomain,
-      owner_id: email,
-    },
-    { onConflict: 'domain' }
-  );
+  if (existing) {
+    if (existing.owner_email && existing.owner_email !== params.ownerEmail) {
+      throw new Error('OWNER_EMAIL_MISMATCH');
+    }
 
-  if (storeError) {
-    throw new Error(storeError.message || `Failed to upsert store ${normalizedDomain}`);
+    const allowedDomains = buildAllowedDomains(
+      params.shopifyDomain,
+      params.explicitDomain,
+      existing.allowed_domains
+    );
+
+    const { error: updateError } = await supabaseAdmin
+      .from('shops')
+      .update({
+        name: desiredName,
+        owner_email: params.ownerEmail,
+        shopify_domain: params.shopifyDomain,
+        allowed_domains: allowedDomains,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id);
+
+    if (updateError) {
+      throw new Error(updateError.message || 'Failed to update shop');
+    }
+
+    return {
+      shopId: existing.id,
+      ownerEmail: params.ownerEmail,
+    };
   }
 
-  const { error: storeUserError } = await supabaseAdmin.from('store_users').upsert(
-    {
-      domain: normalizedDomain,
-      email,
-      invited_by: null,
-      role: 'owner',
-      status: 'active',
-    },
-    { onConflict: 'domain,email' }
-  );
+  const allowedDomains = buildAllowedDomains(params.shopifyDomain, params.explicitDomain, []);
 
-  if (storeUserError) {
-    throw new Error(storeUserError.message || `Failed to upsert store user for ${normalizedDomain}`);
+  const { data: inserted, error: insertError } = await supabaseAdmin
+    .from('shops')
+    .insert({
+      name: desiredName,
+      shopify_domain: params.shopifyDomain,
+      owner_email: params.ownerEmail,
+      allowed_domains: allowedDomains,
+    })
+    .select('id')
+    .single();
+
+  if (insertError || !inserted?.id) {
+    throw new Error(insertError?.message || 'Failed to create shop');
   }
+
+  return {
+    shopId: String(inserted.id),
+    ownerEmail: params.ownerEmail,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -287,47 +314,76 @@ Deno.serve(async (req) => {
 
   const supabaseAdmin = getServiceClient();
 
-  const legacyShop = await resolveLegacyShop(supabaseAdmin, canonicalShopifyDomain);
+  const existingShop = await findShopByShopifyDomain(supabaseAdmin, canonicalShopifyDomain);
+  const payloadOwnerEmail = asLowercaseEmail(payload.owner_email);
+  const ownerEmail = payloadOwnerEmail ?? existingShop?.owner_email ?? null;
 
-  const payloadDomain = asString(payload.domain);
-  const normalizedPayloadDomain = payloadDomain ? normalizeDomainInput(payloadDomain) : null;
-
-  const canonicalDomain =
-    normalizedPayloadDomain ?? legacyShop.domain ?? deriveDomainFromShopifyDomain(canonicalShopifyDomain);
-
-  let ownerEmail = asLowercaseEmail(payload.owner_email) ?? legacyShop.ownerEmail;
   if (!ownerEmail) {
-    ownerEmail = await getExistingStoreOwnerByDomain(supabaseAdmin, canonicalDomain);
+    return errorResponse(422, 'owner_email is required for first-time shop install', 'OWNER_EMAIL_REQUIRED');
   }
 
-  if (ownerEmail) {
+  const explicitDomain = asString(payload.domain);
+  const storeName = asString(payload.store_name ?? payload.name);
+
+  try {
     await ensureUserLicense(supabaseAdmin, ownerEmail);
-    await upsertOwnerStore(supabaseAdmin, ownerEmail, canonicalDomain);
-  }
 
-  const encrypted = await encryptShopifyToken(accessToken);
-  const now = new Date().toISOString();
+    const { shopId } = await upsertShop(supabaseAdmin, {
+      shopifyDomain: canonicalShopifyDomain,
+      ownerEmail,
+      explicitDomain,
+      storeName,
+    });
 
-  const { error: upsertError } = await supabaseAdmin.from('store_shopify_credentials').upsert(
-    {
-      domain: canonicalDomain,
+    const { error: shopUserError } = await supabaseAdmin
+      .from('shop_users')
+      .upsert(
+        {
+          shop_id: shopId,
+          email: ownerEmail,
+          invited_by: null,
+          role: 'owner',
+          status: 'active',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'shop_id,email' }
+      );
+
+    if (shopUserError) {
+      return errorResponse(500, shopUserError.message || 'Failed to upsert owner membership');
+    }
+
+    const encrypted = await encryptShopifyToken(accessToken);
+    const now = new Date().toISOString();
+
+    const { error: upsertError } = await supabaseAdmin
+      .from('shop_credentials')
+      .upsert(
+        {
+          shop_id: shopId,
+          shopify_domain: canonicalShopifyDomain,
+          access_token_ciphertext: encrypted.ciphertextB64,
+          access_token_iv: encrypted.ivB64,
+          updated_at: now,
+          last_validated_at: now,
+        },
+        { onConflict: 'shop_id' }
+      );
+
+    if (upsertError) {
+      return errorResponse(500, upsertError.message || 'Failed to save Shopify credentials');
+    }
+
+    return jsonResponse({
+      ok: true,
+      shop_id: shopId,
       shopify_domain: canonicalShopifyDomain,
-      access_token_ciphertext: encrypted.ciphertextB64,
-      access_token_iv: encrypted.ivB64,
-      updated_at: now,
-      last_validated_at: now,
-    },
-    { onConflict: 'domain' }
-  );
-
-  if (upsertError) {
-    return errorResponse(500, upsertError.message || 'Failed to save Shopify credentials');
+      owner_email: ownerEmail,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected finalize error';
+    const isOwnerMismatch = message === 'OWNER_EMAIL_MISMATCH';
+    const reason = isOwnerMismatch ? 'OWNER_EMAIL_MISMATCH' : undefined;
+    return errorResponse(isOwnerMismatch ? 409 : 500, message, reason);
   }
-
-  return jsonResponse({
-    ok: true,
-    domain: canonicalDomain,
-    shopify_domain: canonicalShopifyDomain,
-    owner_email: ownerEmail,
-  });
 });

@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { filter, finalize, take } from 'rxjs/operators';
+import { filter, take } from 'rxjs/operators';
 import { environment } from '../../../../environment/environment';
 import { LicenseFacade } from '../../../core/facades/license.facade';
 import { StoreContextFacade } from '../../../core/facades/store-context.facade';
@@ -28,23 +28,12 @@ import { resolveShopifyInstallUrl } from '../../../shared/utils/shopify-install'
             type="button"
             class="btn-primary"
             (click)="openShopifyInstall()"
-            [disabled]="!shopifyInstallUrl || syncingStores"
+            [disabled]="!shopifyInstallUrl"
           >
             Install on Shopify
           </button>
-          <button
-            type="button"
-            class="btn-secondary"
-            (click)="syncLinkedStores()"
-            [disabled]="syncingStores"
-          >
-            {{ syncingStores ? 'Refreshing...' : 'Refresh linked stores' }}
-          </button>
           <a routerLink="/app/install" class="btn-link">See integration guide</a>
         </div>
-
-        <p class="hint error" *ngIf="syncError">{{ syncError }}</p>
-        <p class="hint success" *ngIf="syncSuccess">{{ syncSuccess }}</p>
 
         <p class="hint" *ngIf="!shopifyInstallUrl">
           Shopify install URL is not configured yet. Contact support.
@@ -304,10 +293,6 @@ export class PortalDashboardComponent implements OnInit {
   readonly licenseVm$ = this.licenseFacade.vm$;
   readonly shopifyInstallUrl = resolveShopifyInstallUrl(environment.publicShopifyInstallUrl);
 
-  syncingStores = false;
-  syncError = '';
-  syncSuccess = '';
-
   ngOnInit(): void {
     const shouldRedirectToShopify = this.route.snapshot.queryParamMap.get('onboarding') === 'shopify';
     if (!shouldRedirectToShopify || !this.shopifyInstallUrl) {
@@ -332,42 +317,6 @@ export class PortalDashboardComponent implements OnInit {
     }
 
     window.location.assign(this.shopifyInstallUrl);
-  }
-
-  syncLinkedStores(): void {
-    if (this.syncingStores) {
-      return;
-    }
-
-    this.syncingStores = true;
-    this.syncError = '';
-    this.syncSuccess = '';
-
-    this.storeContextFacade
-      .syncOwnerStoresFromLegacy()
-      .pipe(
-        finalize(() => {
-          this.syncingStores = false;
-        })
-      )
-      .subscribe({
-        next: (result) => {
-          const syncedCount = result.synced;
-          const credentialsSynced = result.credentialsSynced ?? 0;
-
-          this.syncSuccess =
-            syncedCount > 0
-              ? `${syncedCount} store${syncedCount === 1 ? '' : 's'} imported from Shopify${
-                  credentialsSynced > 0
-                    ? ` (${credentialsSynced} credential${credentialsSynced === 1 ? '' : 's'} synced)`
-                    : ''
-                }.`
-              : 'No linked owner stores found yet. Finish install in Shopify and retry.';
-        },
-        error: (error: Error) => {
-          this.syncError = error?.message || 'Could not refresh linked stores.';
-        },
-      });
   }
 
   getLicenseStatusClass(active: boolean, expiresAt?: string | null): string {

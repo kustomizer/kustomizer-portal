@@ -7,7 +7,7 @@ import {
 } from '../_shared/edge.ts';
 
 type RemoveStoreUserRequest = {
-  domain?: string;
+  shop_id?: string;
   email?: string;
 };
 
@@ -27,50 +27,51 @@ Deno.serve(async (req) => {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const domain = payload.domain?.trim();
-  const email = payload.email?.trim();
+  const shopId = payload.shop_id?.trim();
+  const email = payload.email?.trim().toLowerCase();
 
-  if (!domain || !email) {
-    return errorResponse(422, 'domain and email are required');
+  if (!shopId || !email) {
+    return errorResponse(422, 'shop_id and email are required');
   }
 
   const user = await getUser(req);
-  if (!user?.email) {
+  const userEmail = user?.email?.trim().toLowerCase();
+  if (!userEmail) {
     return errorResponse(401, 'Unauthorized');
   }
 
   const supabaseAdmin = getServiceClient();
 
-  const { data: store, error: storeError } = await supabaseAdmin
-    .from('stores')
-    .select('owner_id')
-    .eq('domain', domain)
+  const { data: shop, error: shopError } = await supabaseAdmin
+    .from('shops')
+    .select('owner_email')
+    .eq('id', shopId)
     .single();
 
-  if (storeError || !store) {
-    return errorResponse(404, 'Store not found');
+  if (shopError || !shop) {
+    return errorResponse(404, 'Shop not found');
   }
 
-  if (store.owner_id !== user.email) {
+  if (String(shop.owner_email ?? '').toLowerCase() !== userEmail) {
     return errorResponse(403, 'Only owners can remove users');
   }
 
-  const { data: storeUser, error } = await supabaseAdmin
-    .from('store_users')
-    .update({ status: 'removed' })
-    .eq('domain', domain)
+  const { data: shopUser, error } = await supabaseAdmin
+    .from('shop_users')
+    .update({ status: 'removed', updated_at: new Date().toISOString() })
+    .eq('shop_id', shopId)
     .eq('email', email)
-    .select('domain, email, role, status')
+    .select('shop_id, email, role, status')
     .single();
 
-  if (error || !storeUser) {
+  if (error || !shopUser) {
     return errorResponse(500, error?.message || 'Failed to remove user');
   }
 
   return jsonResponse({
-    domain: storeUser.domain,
-    email: storeUser.email,
-    role: storeUser.role,
-    status: storeUser.status,
+    shop_id: shopUser.shop_id,
+    email: shopUser.email,
+    role: shopUser.role,
+    status: shopUser.status,
   });
 });

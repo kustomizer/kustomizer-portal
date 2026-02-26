@@ -7,7 +7,7 @@ import {
 } from '../_shared/edge.ts';
 
 type InviteStoreUserRequest = {
-  domain?: string;
+  shop_id?: string;
   email?: string;
   role?: string;
 };
@@ -32,12 +32,12 @@ Deno.serve(async (req) => {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const domain = payload.domain?.trim();
-  const email = payload.email?.trim();
+  const shopId = payload.shop_id?.trim();
+  const email = payload.email?.trim().toLowerCase();
   const role = payload.role;
 
-  if (!domain || !email || !role) {
-    return errorResponse(422, 'domain, email, and role are required');
+  if (!shopId || !email || !role) {
+    return errorResponse(422, 'shop_id, email, and role are required');
   }
 
   if (!isValidRole(role)) {
@@ -45,23 +45,24 @@ Deno.serve(async (req) => {
   }
 
   const user = await getUser(req);
-  if (!user?.email) {
+  const userEmail = user?.email?.trim().toLowerCase();
+  if (!userEmail) {
     return errorResponse(401, 'Unauthorized');
   }
 
   const supabaseAdmin = getServiceClient();
 
-  const { data: store, error: storeError } = await supabaseAdmin
-    .from('stores')
-    .select('owner_id')
-    .eq('domain', domain)
+  const { data: shop, error: shopError } = await supabaseAdmin
+    .from('shops')
+    .select('owner_email')
+    .eq('id', shopId)
     .single();
 
-  if (storeError || !store) {
-    return errorResponse(404, 'Store not found');
+  if (shopError || !shop) {
+    return errorResponse(404, 'Shop not found');
   }
 
-  if (store.owner_id !== user.email) {
+  if (String(shop.owner_email ?? '').toLowerCase() !== userEmail) {
     return errorResponse(403, 'Only owners can invite users');
   }
 
@@ -80,26 +81,30 @@ Deno.serve(async (req) => {
     return errorResponse(500, upsertUserError.message);
   }
 
-  const { data: storeUser, error } = await supabaseAdmin
-    .from('store_users')
-    .insert({
-      domain,
-      email,
-      invited_by: user.email,
-      role,
-      status: 'active',
-    })
-    .select('domain, email, role, status')
+  const { data: shopUser, error } = await supabaseAdmin
+    .from('shop_users')
+    .upsert(
+      {
+        shop_id: shopId,
+        email,
+        invited_by: userEmail,
+        role,
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'shop_id,email' }
+    )
+    .select('shop_id, email, role, status')
     .single();
 
-  if (error || !storeUser) {
+  if (error || !shopUser) {
     return errorResponse(500, error?.message || 'Failed to invite user');
   }
 
   return jsonResponse({
-    domain: storeUser.domain,
-    email: storeUser.email,
-    role: storeUser.role,
-    status: storeUser.status,
+    shop_id: shopUser.shop_id,
+    email: shopUser.email,
+    role: shopUser.role,
+    status: shopUser.status,
   });
 });

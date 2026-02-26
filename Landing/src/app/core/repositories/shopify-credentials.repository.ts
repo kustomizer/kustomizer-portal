@@ -6,5 +6,9 @@ export type ShopifyCredentialsUpsertResult = {
 };
 
 export interface ShopifyCredentialsRepository {
-  upsertCredentials(domain: string, shopifyDomain: string, accessToken: string): Observable<ShopifyCredentialsUpsertResult>;
+  upsertCredentials(
+    shopId: string,
+    shopifyDomain: string,
+    accessToken: string
+  ): Observable<ShopifyCredentialsUpsertResult>;
 }

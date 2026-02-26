@@ -1,5 +1,5 @@
 import { GlobalRole } from '../types/enums';
-import { UserId, StoreDomain } from '../types/ids';
+import { UserId } from '../types/ids';
 
 /**
  * Global roles for system-wide permissions
@@ -9,11 +9,11 @@ export { GlobalRole };
 /**
  * Auth session model
  *
- * IMPORTANT: userId is UUID (string), storeDomain is the store primary key.
+ * IMPORTANT: userId is UUID (string), storeId is the shop primary key.
  */
 export interface AuthSession {
   userId: UserId;
-  storeDomain: StoreDomain;
+  storeId: string;
   expiresAt: string;
 }
 

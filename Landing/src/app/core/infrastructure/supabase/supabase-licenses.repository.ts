@@ -37,12 +37,12 @@ export class SupabaseLicensesRepository implements LicensesRepository {
     );
   }
 
-  getLicenseByStore(domain: string): Observable<License | null> {
+  getLicenseByStore(storeId: string): Observable<License | null> {
     return from(
       this.supabaseClient.client
-        .from('stores')
-        .select('domain, owner_id')
-        .eq('domain', domain)
+        .from('shops')
+        .select('id, owner_email')
+        .eq('id', storeId)
         .single()
     ).pipe(
       switchMap(({ data: store, error: storeError }) => {
@@ -52,14 +52,14 @@ export class SupabaseLicensesRepository implements LicensesRepository {
           }
           throw mapSupabaseErrorToDomainError(storeError);
         }
-        if (!store?.owner_id) {
+        if (!store?.owner_email) {
           return from(Promise.resolve({ data: null, error: null }));
         }
         return from(
           this.supabaseClient.client
             .from('users')
             .select('license_id')
-            .eq('email', store.owner_id)
+            .eq('email', store.owner_email)
             .single()
         ).pipe(
           switchMap(({ data: userRow, error: userError }) => {

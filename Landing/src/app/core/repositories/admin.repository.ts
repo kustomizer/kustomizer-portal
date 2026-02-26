@@ -11,9 +11,9 @@ export interface AdminStoreDetail {
 export interface AdminRepository {
   // Store management
   listAllStores(): Observable<Store[]>;
-  getStoreDetail(domain: string): Observable<AdminStoreDetail>;
-  updateStore(domain: string, changes: Partial<Store>): Observable<Store>;
-  deleteStore(domain: string): Observable<void>;
+  getStoreDetail(storeId: string): Observable<AdminStoreDetail>;
+  updateStore(storeId: string, changes: Partial<Store>): Observable<Store>;
+  deleteStore(storeId: string): Observable<void>;
   
   // License management
   updateLicense(

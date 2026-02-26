@@ -27,8 +27,8 @@ Deno.serve(async (req) => {
 
   const supabaseAdmin = getServiceClient();
   const { data: stores, error } = await supabaseAdmin
-    .from('stores')
-    .select('domain, name, owner_id, created_at')
+    .from('shops')
+    .select('id, shopify_domain, name, owner_email, created_at')
     .order('created_at', { ascending: false });
 
   if (error) {

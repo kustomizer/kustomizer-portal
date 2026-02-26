@@ -8,7 +8,7 @@ import {
 } from '../_shared/edge.ts';
 
 type AdminStoreGetRequest = {
-  domain?: string;
+  shop_id?: string;
 };
 
 Deno.serve(async (req) => {
@@ -27,9 +27,9 @@ Deno.serve(async (req) => {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const domain = payload.domain;
-  if (!domain) {
-    return errorResponse(422, 'domain is required');
+  const shopId = payload.shop_id;
+  if (!shopId) {
+    return errorResponse(422, 'shop_id is required');
   }
 
   const user = await getUser(req);
@@ -43,20 +43,20 @@ Deno.serve(async (req) => {
 
   const supabaseAdmin = getServiceClient();
 
-  const { data: store, error: storeError } = await supabaseAdmin
-    .from('stores')
-    .select('domain, name, owner_id, created_at')
-    .eq('domain', domain)
+  const { data: shop, error: shopError } = await supabaseAdmin
+    .from('shops')
+    .select('id, shopify_domain, name, owner_email, created_at')
+    .eq('id', shopId)
     .single();
 
-  if (storeError || !store) {
-    return errorResponse(404, 'Store not found');
+  if (shopError || !shop) {
+    return errorResponse(404, 'Shop not found');
   }
 
   const { data: ownerProfile } = await supabaseAdmin
     .from('users')
     .select('license_id')
-    .eq('email', store.owner_id)
+    .eq('email', shop.owner_email)
     .maybeSingle();
 
   const { data: license } = ownerProfile?.license_id
@@ -67,10 +67,10 @@ Deno.serve(async (req) => {
         .maybeSingle()
     : { data: null };
 
-  const { data: storeUsers } = await supabaseAdmin
-    .from('store_users')
-    .select('email, invited_by, role, status, created_at')
-    .eq('domain', domain)
+  const { data: shopUsers } = await supabaseAdmin
+    .from('shop_users')
+    .select('shop_id, email, invited_by, role, status, created_at')
+    .eq('shop_id', shopId)
     .order('created_at', { ascending: false });
 
   const licensePayload = license
@@ -83,8 +83,14 @@ Deno.serve(async (req) => {
     : null;
 
   return jsonResponse({
-    store,
+    store: {
+      id: shop.id,
+      shopify_domain: shop.shopify_domain,
+      name: shop.name,
+      owner_email: shop.owner_email,
+      created_at: shop.created_at,
+    },
     license: licensePayload,
-    store_users: storeUsers ?? [],
+    store_users: shopUsers ?? [],
   });
 });

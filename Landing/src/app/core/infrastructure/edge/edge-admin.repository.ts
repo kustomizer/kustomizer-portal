@@ -19,34 +19,32 @@ export class EdgeAdminRepository implements AdminRepository {
   private readonly edgeClient = inject(EdgeClientService);
 
   listAllStores(): Observable<Store[]> {
-    return this.edgeClient
-      .callFunction<void, AdminStoresListResponse>('admin_stores_list')
-      .pipe(
-        map((response) =>
-          response.stores.map((s) => ({
-            id: s.domain,
-            domain: s.domain,
-            name: s.name,
-            createdAt: s.created_at,
-            ownerEmail: s.owner_id,
-          }))
-        )
-      );
+    return this.edgeClient.callFunction<void, AdminStoresListResponse>('admin_stores_list').pipe(
+      map((response) =>
+        response.stores.map((s) => ({
+          id: s.id,
+          shopifyDomain: s.shopify_domain,
+          name: s.name,
+          createdAt: s.created_at,
+          ownerEmail: s.owner_email,
+        }))
+      )
+    );
   }
 
   getStoreDetail(storeId: string): Observable<AdminStoreDetail> {
-    const request: AdminStoreGetRequest = { domain: storeId };
+    const request: AdminStoreGetRequest = { shop_id: storeId };
 
     return this.edgeClient
       .callFunction<AdminStoreGetRequest, AdminStoreGetResponse>('admin_store_get', request)
       .pipe(
         map((response) => {
           const store: Store = {
-            id: response.store.domain,
-            domain: response.store.domain,
+            id: response.store.id,
+            shopifyDomain: response.store.shopify_domain,
             name: response.store.name,
             createdAt: response.store.created_at,
-            ownerEmail: response.store.owner_id,
+            ownerEmail: response.store.owner_email,
           };
 
           const license: License | null = response.license
@@ -62,7 +60,7 @@ export class EdgeAdminRepository implements AdminRepository {
             : null;
 
           const storeUsers: StoreUser[] = response.store_users.map((m) => ({
-            domain: storeId,
+            shopId: m.shop_id,
             email: m.email,
             invitedBy: m.invited_by ?? null,
             role: m.role as StoreUserRole,
@@ -81,19 +79,27 @@ export class EdgeAdminRepository implements AdminRepository {
 
   updateStore(storeId: string, changes: Partial<Store>): Observable<Store> {
     const request: AdminStoreUpdateRequest = {
-      domain: storeId,
+      shop_id: storeId,
       name: changes.name,
-      owner_id: changes.ownerEmail,
+      owner_email: changes.ownerEmail,
     };
 
     return this.edgeClient
-      .callFunction<AdminStoreUpdateRequest, { store: Store }>('admin_store_update', request)
-      .pipe(map((response) => response.store));
+      .callFunction<AdminStoreUpdateRequest, { store: any }>('admin_store_update', request)
+      .pipe(
+        map((response) => ({
+          id: response.store.id,
+          shopifyDomain: response.store.shopify_domain,
+          name: response.store.name,
+          createdAt: response.store.created_at,
+          ownerEmail: response.store.owner_email,
+        }))
+      );
   }
 
   deleteStore(storeId: string): Observable<void> {
     return this.edgeClient
-      .callFunction<{ domain: string }, void>('admin_store_delete', { domain: storeId })
+      .callFunction<{ shop_id: string }, void>('admin_store_delete', { shop_id: storeId })
       .pipe(map(() => undefined));
   }
 
@@ -126,12 +132,9 @@ export class EdgeAdminRepository implements AdminRepository {
   }
 
   isAdmin(): Observable<boolean> {
-    // Call admin check endpoint or inspect user metadata
-    // For MVP, we can check if admin endpoints are accessible
     return this.listAllStores().pipe(
       map(() => true),
       catchError((error) => {
-        // If forbidden, user is not admin
         if (error instanceof DomainError && error.type === 'Forbidden') {
           return of(false);
         }

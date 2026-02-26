@@ -3,16 +3,16 @@ import { StoreUser } from '../models';
 import { StoreUserRole, StoreUserStatus } from '../types/enums';
 
 export interface StoreUsersRepository {
-  listStoreUsers(domain: string): Observable<StoreUser[]>;
+  listStoreUsers(shopId: string): Observable<StoreUser[]>;
 
   inviteStoreUser(
-    domain: string,
+    shopId: string,
     email: string,
     role: StoreUserRole
   ): Observable<StoreUser>;
 
   updateStoreUserStatus(
-    domain: string,
+    shopId: string,
     email: string,
     status: StoreUserStatus
   ): Observable<StoreUser>;

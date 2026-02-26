@@ -8,7 +8,7 @@ import {
 } from '../_shared/edge.ts';
 
 type AdminStoreDeleteRequest = {
-  domain?: string;
+  shop_id?: string;
 };
 
 Deno.serve(async (req) => {
@@ -27,9 +27,9 @@ Deno.serve(async (req) => {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const domain = payload.domain;
-  if (!domain) {
-    return errorResponse(422, 'domain is required');
+  const shopId = payload.shop_id;
+  if (!shopId) {
+    return errorResponse(422, 'shop_id is required');
   }
 
   const user = await getUser(req);
@@ -43,22 +43,28 @@ Deno.serve(async (req) => {
 
   const supabaseAdmin = getServiceClient();
 
-  const { error: storeUsersError } = await supabaseAdmin
-    .from('store_users')
+  const { error: shopUsersError } = await supabaseAdmin
+    .from('shop_users')
     .delete()
-    .eq('domain', domain);
+    .eq('shop_id', shopId);
 
-  if (storeUsersError) {
-    return errorResponse(500, storeUsersError.message);
+  if (shopUsersError) {
+    return errorResponse(500, shopUsersError.message);
   }
 
-  const { error: storeError } = await supabaseAdmin
-    .from('stores')
+  const { error: credentialsError } = await supabaseAdmin
+    .from('shop_credentials')
     .delete()
-    .eq('domain', domain);
+    .eq('shop_id', shopId);
 
-  if (storeError) {
-    return errorResponse(500, storeError.message);
+  if (credentialsError) {
+    return errorResponse(500, credentialsError.message);
+  }
+
+  const { error: shopError } = await supabaseAdmin.from('shops').delete().eq('id', shopId);
+
+  if (shopError) {
+    return errorResponse(500, shopError.message);
   }
 
   return jsonResponse({});

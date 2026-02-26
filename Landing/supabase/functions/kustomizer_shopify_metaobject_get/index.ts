@@ -22,6 +22,7 @@ type KustomizerShopifyMetaobjectGetRequest = {
 const SHOPIFY_API_VERSION = Deno.env.get('SHOPIFY_API_VERSION') ?? '2024-10';
 
 type StoreCredentialRow = {
+  shop_id: string | null;
   shopify_domain: string | null;
   access_token_ciphertext: string | null;
   access_token_iv: string | null;
@@ -38,27 +39,27 @@ function asNonEmptyString(value: unknown): string | null {
 
 async function persistPrimaryCiphertext(
   supabaseAdmin: ReturnType<typeof getServiceClient>,
-  canonicalDomain: string,
+  shopId: string,
   shopifyDomain: string,
   accessToken: string
 ) {
   const now = new Date().toISOString();
   const encrypted = await encryptShopifyToken(accessToken);
 
-  const { error } = await supabaseAdmin.from('store_shopify_credentials').upsert(
+  const { error } = await supabaseAdmin.from('shop_credentials').upsert(
     {
-      domain: canonicalDomain,
+      shop_id: shopId,
       shopify_domain: shopifyDomain,
       access_token_ciphertext: encrypted.ciphertextB64,
       access_token_iv: encrypted.ivB64,
       updated_at: now,
       last_validated_at: now,
     },
-    { onConflict: 'domain' }
+    { onConflict: 'shop_id' }
   );
 
   if (error) {
-    throw new Error(error.message || `Failed to rewrite Shopify credentials for ${canonicalDomain}`);
+    throw new Error(error.message || `Failed to rewrite Shopify credentials for ${shopId}`);
   }
 }
 
@@ -125,13 +126,11 @@ Deno.serve(async (req) => {
     return errorResponse(404, 'Store user not found');
   }
 
-  const { storeUser, canonicalDomain, shopifyDomain: resolvedShopifyDomain } = resolvedMembership;
+  const { shopUser, shopId, shopifyDomain: resolvedShopifyDomain, ownerEmail } = resolvedMembership;
 
-  if (storeUser.status !== 'active') {
+  if (shopUser.status !== 'active') {
     return errorResponse(403, 'User is not active');
   }
-
-  const ownerEmail = storeUser.invited_by ?? storeUser.email;
 
   const { data: ownerProfile, error: ownerError } = await supabaseAdmin
     .from('users')
@@ -159,9 +158,9 @@ Deno.serve(async (req) => {
   }
 
   const { data: credsByDomain, error: credsByDomainError } = await supabaseAdmin
-    .from('store_shopify_credentials')
-    .select('shopify_domain, access_token_ciphertext, access_token_iv')
-    .eq('domain', canonicalDomain)
+    .from('shop_credentials')
+    .select('shop_id, shopify_domain, access_token_ciphertext, access_token_iv')
+    .eq('shop_id', shopId)
     .maybeSingle();
 
   let creds = credsByDomain;
@@ -170,8 +169,8 @@ Deno.serve(async (req) => {
     const fallbackShopifyDomain = normalizeShopifyDomainInput(resolvedShopifyDomain ?? domain);
 
     const { data: credsByShopify } = await supabaseAdmin
-      .from('store_shopify_credentials')
-      .select('shopify_domain, access_token_ciphertext, access_token_iv')
+      .from('shop_credentials')
+      .select('shop_id, shopify_domain, access_token_ciphertext, access_token_iv')
       .eq('shopify_domain', fallbackShopifyDomain)
       .maybeSingle();
 
@@ -198,7 +197,7 @@ Deno.serve(async (req) => {
 
     if (decrypted.keySource === 'legacy') {
       try {
-        await persistPrimaryCiphertext(supabaseAdmin, canonicalDomain, shopifyDomain, accessToken);
+        await persistPrimaryCiphertext(supabaseAdmin, shopId, shopifyDomain, accessToken);
       } catch {
         // Do not block editor reads when credential migration writeback fails.
       }
