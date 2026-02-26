@@ -427,6 +427,9 @@ export class StoreDetailComponent {
       return;
     }
 
-    window.location.assign(url);
+    const openedWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!openedWindow) {
+      window.location.assign(url);
+    }
   }
 }

@@ -265,7 +265,10 @@ export class StoreListComponent {
       return;
     }
 
-    window.location.assign(url);
+    const openedWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!openedWindow) {
+      window.location.assign(url);
+    }
   }
 
   reconnectStore(store: Store): void {
@@ -278,6 +281,9 @@ export class StoreListComponent {
       return;
     }
 
-    window.location.assign(url);
+    const openedWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!openedWindow) {
+      window.location.assign(url);
+    }
   }
 }

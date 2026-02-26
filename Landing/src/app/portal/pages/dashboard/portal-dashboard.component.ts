@@ -316,7 +316,10 @@ export class PortalDashboardComponent implements OnInit {
       return;
     }
 
-    window.location.assign(this.shopifyInstallUrl);
+    const openedWindow = window.open(this.shopifyInstallUrl, '_blank', 'noopener,noreferrer');
+    if (!openedWindow) {
+      window.location.assign(this.shopifyInstallUrl);
+    }
   }
 
   getLicenseStatusClass(active: boolean, expiresAt?: string | null): string {
