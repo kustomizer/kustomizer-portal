@@ -4,7 +4,7 @@
 - [x] Add app-owned install endpoint (`/api/shopify/install`) with optional `shop` and fallback redirect behavior.
 - [x] Add app-owned OAuth callback endpoint (`/api/shopify/callback`) with state + HMAC validation and token exchange.
 - [x] Add privileged finalize endpoint (`shopify_oauth_finalize`) to persist encrypted credentials from OAuth callback.
-- [x] Add Shopify privacy compliance endpoint (`POST /webhooks`) with HMAC validation for GDPR topics.
+- [x] Add Shopify privacy compliance endpoint (`POST /api/webhooks`) with HMAC validation for GDPR topics.
 - [x] Add owner store sync endpoint to import linked Shopify stores from legacy schema (`shops` / `v_legacy_store_users`) into portal tables.
 - [x] Extend owner store sync to attempt credentials import from legacy `shop_credentials` (encrypted or plaintext token fields).
 - [x] Update register/portal empty-state UX to route owner onboarding through Shopify instead of manual store creation.

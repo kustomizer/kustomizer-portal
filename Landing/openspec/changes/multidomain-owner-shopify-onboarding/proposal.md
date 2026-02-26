@@ -78,7 +78,7 @@ Out of scope:
 
 ### 6) Privacy compliance webhooks
 
-- Add `POST /webhooks` to accept Shopify privacy compliance topics.
+- Add `POST /api/webhooks` to accept Shopify privacy compliance topics.
 - Validate `X-Shopify-Hmac-Sha256` using `SHOPIFY_WEBHOOK_SECRET` (fallback to app secret envs when needed).
 - Return quick 200 acknowledgements for valid requests and log topic/shop/webhook id metadata for auditability.
 

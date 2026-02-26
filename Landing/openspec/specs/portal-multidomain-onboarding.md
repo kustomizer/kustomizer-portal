@@ -42,7 +42,7 @@ This spec defines owner onboarding and multidomain behavior for the client porta
 
 ### Privacy Compliance Webhooks
 
-- `POST /webhooks` accepts Shopify privacy topics (`customers/data_request`, `customers/redact`, `shop/redact`).
+- `POST /api/webhooks` accepts Shopify privacy topics (`customers/data_request`, `customers/redact`, `shop/redact`).
 - It validates `x-shopify-hmac-sha256` using `SHOPIFY_WEBHOOK_SECRET` (fallback to app secret envs when not explicitly set).
 - It returns `200` quickly for valid requests and logs webhook metadata (`topic`, `shop_domain`, `x-shopify-webhook-id`).
 

@@ -473,7 +473,7 @@ app.get('/api/shopify/callback', async (req, res) => {
   }
 });
 
-app.post('/webhooks', async (req, res) => {
+app.post(['/webhooks', '/api/webhooks'], async (req, res) => {
   const topic = normalizeWebhookTopic(req.get('x-shopify-topic'));
   if (!isPrivacyWebhookTopic(topic)) {
     res.status(200).json({ ok: true });
