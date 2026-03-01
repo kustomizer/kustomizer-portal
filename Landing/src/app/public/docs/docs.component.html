@@ -1,0 +1,615 @@
+<div class="docs-layout">
+  <!-- Top bar -->
+  <header class="docs-topbar">
+    <a class="docs-brand" routerLink="/">
+      <span class="brand-mark">K</span>
+      <span class="brand-name">Kustomizer</span>
+      <span class="brand-divider"></span>
+      <span class="brand-label">Docs</span>
+    </a>
+    <div class="topbar-actions">
+      <a class="topbar-link" href="https://www.npmjs.com/package/@kustomizerr/visual-editor" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        npm
+      </a>
+      <a class="topbar-link" routerLink="/app">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Go to Portal
+      </a>
+      <button class="mobile-toggle" (click)="toggleMobileNav()" aria-label="Toggle navigation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm">
+          @if (mobileNavOpen()) {
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          } @else {
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+          }
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="docs-sidebar" [class.open]="mobileNavOpen()">
+    <nav class="sidebar-nav">
+      @for (item of navItems; track item.id) {
+        <button
+          class="nav-item"
+          [class.active]="activeSection() === item.id"
+          (click)="setSection(item.id)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="nav-icon">
+            <path [attr.d]="item.icon"/>
+          </svg>
+          {{ item.label }}
+        </button>
+      }
+    </nav>
+    <div class="sidebar-footer">
+      <div class="version-badge">v0.1.0</div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="docs-content">
+
+    <!-- ═══════════════ GETTING STARTED ═══════════════ -->
+    @if (activeSection() === 'getting-started') {
+      <div class="content-section" style="animation: docsFadeIn 0.3s ease">
+        <div class="section-header">
+          <span class="section-eyebrow">Overview</span>
+          <h1>Getting Started</h1>
+          <p class="section-lead">
+            Go from zero to a fully customizable headless storefront in four steps.
+          </p>
+        </div>
+
+        <div class="steps-grid">
+          <div class="step-card">
+            <div class="step-number">1</div>
+            <div class="step-body">
+              <h3>Create your account</h3>
+              <p>Sign up at <a href="https://kustomizer.net/login" target="_blank" class="inline-link">kustomizer.net</a> using the <strong>same email as your Shopify store owner</strong>.</p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-number">2</div>
+            <div class="step-body">
+              <h3>Install the Shopify App</h3>
+              <p>Add Kustomizer to your Shopify store from the app listing.</p>
+              <a class="step-action" href="https://apps.shopify.com" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-xs"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Open Shopify App Store
+              </a>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-number">3</div>
+            <div class="step-body">
+              <h3>Configure your domain</h3>
+              <p>In the Shopify App &rarr; <strong>Settings</strong>, enter your headless storefront domain so Kustomizer can authorize API requests.</p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-number">4</div>
+            <div class="step-body">
+              <h3>Install the NPM package</h3>
+              <p>Add the library to your Angular project and start building pages visually.</p>
+              <button class="step-action" (click)="setSection('installation')">
+                Continue to Installation
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-xs"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-callout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="callout-icon"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <div>
+            <strong>Requirements</strong>
+            <p>Angular 19+ &bull; NgRx Store &bull; Node.js 18+</p>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ═══════════════ INSTALLATION ═══════════════ -->
+    @if (activeSection() === 'installation') {
+      <div class="content-section" style="animation: docsFadeIn 0.3s ease">
+        <div class="section-header">
+          <span class="section-eyebrow">Setup</span>
+          <h1>Installation</h1>
+          <p class="section-lead">
+            Two commands. One config file. You're live.
+          </p>
+        </div>
+
+        <h2 class="subsection-title"><span class="subsection-num">1</span> Install packages</h2>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">terminal</span>
+            <button class="copy-btn" (click)="copyCode('npm install @kustomizerr/visual-editor @ngrx/store', 0)">
+              {{ copiedIndex() === 0 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code><span class="tk-prompt">$</span> npm install <span class="tk-pkg">&#64;kustomizerr/visual-editor</span> <span class="tk-pkg">&#64;ngrx/store</span></code></pre>
+        </div>
+
+        <h2 class="subsection-title"><span class="subsection-num">2</span> Configure providers</h2>
+        <p class="subsection-desc">Add the Kustomizer providers to your <code>app.config.ts</code>.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">app.config.ts</span>
+            <button class="copy-btn" (click)="copyCode(installCode, 1)">
+              {{ copiedIndex() === 1 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code><span class="tk-kw">import</span> {{ '{' }} provideStore {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;ngrx/store'</span>;
+<span class="tk-kw">import</span> {{ '{' }}
+  provideVisualEditor,
+  provideVisualEditorStore,
+  provideEditorComponents,
+  STORE_DOMAIN,
+{{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;kustomizerr/visual-editor'</span>;
+<span class="tk-kw">import</span> {{ '{' }} editorComponents {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'./editor-components'</span>;
+
+<span class="tk-kw">export const</span> appConfig: ApplicationConfig = {{ '{' }}
+  providers: [
+    provideRouter(routes),
+    provideHttpClient(withFetch()),
+    <span class="tk-hl">provideStore(),</span>
+    <span class="tk-hl">provideVisualEditorStore(),</span>
+    <span class="tk-hl">{{ '{' }} provide: STORE_DOMAIN, useValue: <span class="tk-str">'your-store.myshopify.com'</span> {{ '}' }},</span>
+    <span class="tk-hl">provideVisualEditor({{ '{' }} api: {{ '{' }} apiUrl: <span class="tk-str">'https://kustomizer.xyz'</span> {{ '}' }} {{ '}' }}),</span>
+    <span class="tk-hl">provideEditorComponents(editorComponents),</span>
+    provideClientHydration(withEventReplay()),
+  ],
+{{ '}' }};</code></pre>
+        </div>
+
+        <div class="info-callout success">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="callout-icon"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div>
+            <strong>That's it.</strong>
+            <p>The library is installed and ready. Next, set up your routes.</p>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ═══════════════ CONFIGURATION ═══════════════ -->
+    @if (activeSection() === 'configuration') {
+      <div class="content-section" style="animation: docsFadeIn 0.3s ease">
+        <div class="section-header">
+          <span class="section-eyebrow">Advanced</span>
+          <h1>Configuration</h1>
+          <p class="section-lead">
+            Fine-tune the editor behavior with the full configuration object.
+          </p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">VisualEditorConfig</span>
+            <button class="copy-btn" (click)="copyCode(configCode, 2)">
+              {{ copiedIndex() === 2 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code>provideVisualEditor({{ '{' }}
+  <span class="tk-comment">// Backend connection</span>
+  api: {{ '{' }}
+    apiUrl: <span class="tk-str">'https://kustomizer.xyz'</span>,
+  {{ '}' }},
+
+  <span class="tk-comment">// UI toggles</span>
+  ui: {{ '{' }}
+    showBackButton: <span class="tk-bool">true</span>,
+    showPublishButtons: <span class="tk-bool">true</span>,
+    showSaveButton: <span class="tk-bool">true</span>,
+  {{ '}' }},
+
+  <span class="tk-comment">// Custom navigation handler</span>
+  navigation: {{ '{' }}
+    navigationService: MyCustomNavigation,
+  {{ '}' }},
+{{ '}' }})</code></pre>
+        </div>
+
+        <div class="config-table">
+          <h2 class="subsection-title">Options reference</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>api.apiUrl</code></td><td>string</td><td>-</td><td>Kustomizer backend URL</td></tr>
+                <tr><td><code>pages.useInMemory</code></td><td>boolean</td><td><code>false</code></td><td>Use in-memory storage (no backend)</td></tr>
+                <tr><td><code>ui.showBackButton</code></td><td>boolean</td><td><code>true</code></td><td>Show back button in editor toolbar</td></tr>
+                <tr><td><code>ui.showPublishButtons</code></td><td>boolean</td><td><code>true</code></td><td>Show publish/unpublish actions</td></tr>
+                <tr><td><code>ui.showSaveButton</code></td><td>boolean</td><td><code>true</code></td><td>Show save button in editor toolbar</td></tr>
+                <tr><td><code>navigation.navigationService</code></td><td>Type</td><td>DefaultRouterNavigation</td><td>Custom navigation implementation</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ═══════════════ ROUTING ═══════════════ -->
+    @if (activeSection() === 'routing') {
+      <div class="content-section" style="animation: docsFadeIn 0.3s ease">
+        <div class="section-header">
+          <span class="section-eyebrow">Navigation</span>
+          <h1>Routing</h1>
+          <p class="section-lead">
+            Connect the visual editor to your Angular router.
+          </p>
+        </div>
+
+        <h2 class="subsection-title"><span class="subsection-num">1</span> Define routes</h2>
+        <p class="subsection-desc">The library exports three route-ready components: <code>AdminPanelComponent</code>, <code>PageManagerComponent</code>, and <code>VisualEditorComponent</code>.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">app.routes.ts</span>
+            <button class="copy-btn" (click)="copyCode(routingCode, 3)">
+              {{ copiedIndex() === 3 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code><span class="tk-kw">export const</span> routes: Routes = [
+  <span class="tk-comment">// Admin panel (editor + page manager)</span>
+  {{ '{' }}
+    path: <span class="tk-str">'admin'</span>,
+    loadComponent: () <span class="tk-kw">=></span>
+      <span class="tk-kw">import</span>(<span class="tk-str">'&#64;kustomizerr/visual-editor'</span>)
+        .then(m <span class="tk-kw">=></span> m.AdminPanelComponent),
+    children: [
+      {{ '{' }}
+        path: <span class="tk-str">''</span>,
+        loadComponent: () <span class="tk-kw">=></span>
+          <span class="tk-kw">import</span>(<span class="tk-str">'&#64;kustomizerr/visual-editor'</span>)
+            .then(m <span class="tk-kw">=></span> m.PageManagerComponent),
+      {{ '}' }},
+      {{ '{' }}
+        path: <span class="tk-str">'pages/:pageId'</span>,
+        loadComponent: () <span class="tk-kw">=></span>
+          <span class="tk-kw">import</span>(<span class="tk-str">'&#64;kustomizerr/visual-editor'</span>)
+            .then(m <span class="tk-kw">=></span> m.VisualEditorComponent),
+      {{ '}' }},
+    ],
+  {{ '}' }},
+
+  <span class="tk-comment">// Public pages (rendered for visitors)</span>
+  {{ '{' }}
+    path: <span class="tk-str">'pages/:slug'</span>,
+    loadComponent: () <span class="tk-kw">=></span>
+      <span class="tk-kw">import</span>(<span class="tk-str">'./pages/page-renderer.component'</span>)
+        .then(m <span class="tk-kw">=></span> m.PageRendererComponent),
+    resolve: {{ '{' }} page: pageResolver {{ '}' }},
+  {{ '}' }},
+];</code></pre>
+        </div>
+
+        <h2 class="subsection-title"><span class="subsection-num">2</span> Page renderer</h2>
+        <p class="subsection-desc">Create a simple component that renders published pages using the resolver pattern for instant SSR.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">page-renderer.component.ts</span>
+            <button class="copy-btn" (click)="copyCode(rendererCode, 4)">
+              {{ copiedIndex() === 4 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code><span class="tk-kw">import</span> {{ '{' }} Component, inject {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;angular/core'</span>;
+<span class="tk-kw">import</span> {{ '{' }} ActivatedRoute {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;angular/router'</span>;
+<span class="tk-kw">import</span> {{ '{' }} toSignal {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;angular/core/rxjs-interop'</span>;
+<span class="tk-kw">import</span> {{ '{' }} map {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'rxjs'</span>;
+<span class="tk-kw">import</span> {{ '{' }}
+  DynamicRendererComponent, Page
+{{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;kustomizerr/visual-editor'</span>;
+
+&#64;Component({{ '{' }}
+  selector: <span class="tk-str">'app-page-renderer'</span>,
+  standalone: <span class="tk-bool">true</span>,
+  imports: [DynamicRendererComponent],
+  template: <span class="tk-str">`
+    &#64;if (page()) {{ '{' }}
+      &#64;for (section of page()!.sections;
+           track section.id) {{ '{' }}
+        &lt;lib-dynamic-renderer
+          [element]="section"
+          [context]="{{ '{' }} isEditor: false {{ '}' }}" /&gt;
+      {{ '}' }}
+    {{ '}' }}
+  `</span>,
+{{ '}' }})
+<span class="tk-kw">export class</span> PageRendererComponent {{ '{' }}
+  <span class="tk-kw">private readonly</span> route = inject(ActivatedRoute);
+  <span class="tk-kw">readonly</span> page = toSignal(
+    <span class="tk-kw">this</span>.route.data.pipe(
+      map(d <span class="tk-kw">=></span> d[<span class="tk-str">'page'</span>] <span class="tk-kw">as</span> Page | <span class="tk-bool">null</span>)
+    ),
+    {{ '{' }} initialValue: <span class="tk-bool">null</span> {{ '}' }}
+  );
+{{ '}' }}</code></pre>
+        </div>
+      </div>
+    }
+
+    <!-- ═══════════════ CUSTOM COMPONENTS ═══════════════ -->
+    @if (activeSection() === 'components') {
+      <div class="content-section" style="animation: docsFadeIn 0.3s ease">
+        <div class="section-header">
+          <span class="section-eyebrow">Extend</span>
+          <h1>Custom Components</h1>
+          <p class="section-lead">
+            Build drag-and-drop components your team can use in the visual editor.
+          </p>
+        </div>
+
+        <h2 class="subsection-title"><span class="subsection-num">1</span> Create the component</h2>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">hero.component.ts</span>
+            <button class="copy-btn" (click)="copyCode(componentCode, 5)">
+              {{ copiedIndex() === 5 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code><span class="tk-kw">import</span> {{ '{' }} Component, input {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;angular/core'</span>;
+
+&#64;Component({{ '{' }}
+  selector: <span class="tk-str">'app-hero'</span>,
+  standalone: <span class="tk-bool">true</span>,
+  template: <span class="tk-str">`
+    &lt;section [style.background]="bgColor()"
+             class="hero-section"&gt;
+      &lt;h1&gt;{{ '{{' }} title() {{ '}}' }}&lt;/h1&gt;
+      &lt;p&gt;{{ '{{' }} subtitle() {{ '}}' }}&lt;/p&gt;
+    &lt;/section&gt;
+  `</span>,
+{{ '}' }})
+<span class="tk-kw">export class</span> HeroComponent {{ '{' }}
+  <span class="tk-kw">readonly</span> title = input(<span class="tk-str">'Welcome'</span>);
+  <span class="tk-kw">readonly</span> subtitle = input(<span class="tk-str">'Your story starts here'</span>);
+  <span class="tk-kw">readonly</span> bgColor = input(<span class="tk-str">'#1a1a2e'</span>);
+
+  <span class="tk-comment">// Required internal inputs</span>
+  <span class="tk-kw">readonly</span> _elementId = input(<span class="tk-str">''</span>);
+  <span class="tk-kw">readonly</span> _children = input&lt;unknown[]&gt;([]);
+  <span class="tk-kw">readonly</span> _context = input&lt;Record&lt;string, unknown&gt;&gt;({{ '{' }}{{ '}' }});
+{{ '}' }}</code></pre>
+        </div>
+
+        <h2 class="subsection-title"><span class="subsection-num">2</span> Define the schema</h2>
+        <p class="subsection-desc">The definition tells the editor what properties are editable and how to display the component in the panel.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">hero.definition.ts</span>
+            <button class="copy-btn" (click)="copyCode(definitionCode, 6)">
+              {{ copiedIndex() === 6 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code><span class="tk-kw">import</span> {{ '{' }} ComponentDefinition {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;kustomizerr/visual-editor'</span>;
+<span class="tk-kw">import</span> {{ '{' }} HeroComponent {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'./hero.component'</span>;
+
+<span class="tk-kw">export const</span> heroDefinition: ComponentDefinition = {{ '{' }}
+  type: <span class="tk-str">'hero'</span>,
+  name: <span class="tk-str">'Hero Banner'</span>,
+  category: <span class="tk-str">'layout'</span>,
+  component: HeroComponent,
+  isSection: <span class="tk-bool">true</span>,
+  draggable: <span class="tk-bool">true</span>,
+  deletable: <span class="tk-bool">true</span>,
+  props: {{ '{' }}
+    title: {{ '{' }}
+      type: <span class="tk-str">'string'</span>,
+      label: <span class="tk-str">'Title'</span>,
+      defaultValue: <span class="tk-str">'Welcome'</span>,
+      group: <span class="tk-str">'Content'</span>,
+    {{ '}' }},
+    subtitle: {{ '{' }}
+      type: <span class="tk-str">'string'</span>,
+      label: <span class="tk-str">'Subtitle'</span>,
+      defaultValue: <span class="tk-str">'Your story starts here'</span>,
+      group: <span class="tk-str">'Content'</span>,
+    {{ '}' }},
+    bgColor: {{ '{' }}
+      type: <span class="tk-str">'color'</span>,
+      label: <span class="tk-str">'Background'</span>,
+      defaultValue: <span class="tk-str">'#1a1a2e'</span>,
+      group: <span class="tk-str">'Style'</span>,
+    {{ '}' }},
+  {{ '}' }},
+{{ '}' }};</code></pre>
+        </div>
+
+        <h2 class="subsection-title"><span class="subsection-num">3</span> Register</h2>
+        <p class="subsection-desc">Export all definitions in an array and pass them to <code>provideEditorComponents</code>.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">editor-components/index.ts</span>
+            <button class="copy-btn" (click)="copyCode(registerCode, 7)">
+              {{ copiedIndex() === 7 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code><span class="tk-kw">import</span> {{ '{' }} heroDefinition {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'./hero/hero.definition'</span>;
+
+<span class="tk-kw">export const</span> editorComponents = [
+  heroDefinition,
+  <span class="tk-comment">// ...add more definitions here</span>
+];</code></pre>
+        </div>
+
+        <div class="prop-types">
+          <h2 class="subsection-title">Available prop types</h2>
+          <div class="prop-grid">
+            <div class="prop-chip"><code>string</code> <span>Text input</span></div>
+            <div class="prop-chip"><code>number</code> <span>Numeric input</span></div>
+            <div class="prop-chip"><code>boolean</code> <span>Toggle switch</span></div>
+            <div class="prop-chip"><code>color</code> <span>Color picker</span></div>
+            <div class="prop-chip"><code>image</code> <span>Image upload</span></div>
+            <div class="prop-chip"><code>url</code> <span>URL input</span></div>
+            <div class="prop-chip"><code>richtext</code> <span>Rich text editor</span></div>
+            <div class="prop-chip"><code>textarea</code> <span>Multi-line text</span></div>
+            <div class="prop-chip"><code>select</code> <span>Dropdown select</span></div>
+            <div class="prop-chip"><code>range</code> <span>Range slider</span></div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ═══════════════ SSR ═══════════════ -->
+    @if (activeSection() === 'ssr') {
+      <div class="content-section" style="animation: docsFadeIn 0.3s ease">
+        <div class="section-header">
+          <span class="section-eyebrow">Performance</span>
+          <h1>SSR Setup</h1>
+          <p class="section-lead">
+            Serve fully-rendered pages to visitors and search engines.
+          </p>
+        </div>
+
+        <h2 class="subsection-title"><span class="subsection-num">1</span> Configure render modes</h2>
+        <p class="subsection-desc">Use <code>RenderMode.Server</code> for public pages and <code>RenderMode.Client</code> for the admin editor.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">app.routes.server.ts</span>
+            <button class="copy-btn" (click)="copyCode(ssrCode, 8)">
+              {{ copiedIndex() === 8 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code><span class="tk-kw">import</span> {{ '{' }} RenderMode, ServerRoute {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;angular/ssr'</span>;
+
+<span class="tk-kw">export const</span> serverRoutes: ServerRoute[] = [
+  <span class="tk-comment">// Admin: client-only (interactive editor)</span>
+  {{ '{' }} path: <span class="tk-str">'admin/**'</span>, renderMode: RenderMode.<span class="tk-hl">Client</span> {{ '}' }},
+
+  <span class="tk-comment">// Public pages: server-rendered (SEO + fast)</span>
+  {{ '{' }} path: <span class="tk-str">'**'</span>, renderMode: RenderMode.<span class="tk-hl">Server</span> {{ '}' }},
+];</code></pre>
+        </div>
+
+        <h2 class="subsection-title"><span class="subsection-num">2</span> Use a route resolver</h2>
+        <p class="subsection-desc">Resolvers fetch data <strong>before</strong> the component renders, eliminating loading flashes.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">page.resolver.ts</span>
+            <button class="copy-btn" (click)="copyCode(resolverCode, 9)">
+              {{ copiedIndex() === 9 ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+          <pre><code><span class="tk-kw">import</span> {{ '{' }} inject {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;angular/core'</span>;
+<span class="tk-kw">import</span> {{ '{' }} ResolveFn {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;angular/router'</span>;
+<span class="tk-kw">import</span> {{ '{' }} VisualEditorFacade, Page {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'&#64;kustomizerr/visual-editor'</span>;
+<span class="tk-kw">import</span> {{ '{' }} catchError, of {{ '}' }} <span class="tk-kw">from</span> <span class="tk-str">'rxjs'</span>;
+
+<span class="tk-kw">export const</span> pageResolver: ResolveFn&lt;Page | <span class="tk-bool">null</span>&gt; =
+  (route) <span class="tk-kw">=></span> {{ '{' }}
+    <span class="tk-kw">const</span> facade = inject(VisualEditorFacade);
+    <span class="tk-kw">const</span> slug = route.paramMap.get(<span class="tk-str">'slug'</span>);
+
+    <span class="tk-kw">if</span> (!slug) <span class="tk-kw">return</span> of(<span class="tk-bool">null</span>);
+
+    <span class="tk-kw">return</span> facade
+      .getPublishedPageBySlug(slug)
+      .pipe(catchError(() <span class="tk-kw">=></span> of(<span class="tk-bool">null</span>)));
+  {{ '}' }};</code></pre>
+        </div>
+
+        <div class="info-callout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="callout-icon"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <div>
+            <strong>Why resolvers?</strong>
+            <p>Without a resolver, the component renders with a loading state first and then re-renders with data. The resolver ensures data is ready before the component mounts&mdash;no flicker, instant paint.</p>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ═══════════════ API REFERENCE ═══════════════ -->
+    @if (activeSection() === 'api') {
+      <div class="content-section" style="animation: docsFadeIn 0.3s ease">
+        <div class="section-header">
+          <span class="section-eyebrow">Reference</span>
+          <h1>API Reference</h1>
+          <p class="section-lead">
+            Key exports from <code>&#64;kustomizerr/visual-editor</code>.
+          </p>
+        </div>
+
+        <div class="api-group">
+          <h2 class="api-group-title">Providers</h2>
+          <div class="api-card">
+            <code class="api-name">provideVisualEditor(config?)</code>
+            <p>Registers all core services. Pass <code>api.apiUrl</code> to connect to your Kustomizer backend.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">provideVisualEditorStore()</code>
+            <p>Registers the NgRx feature state for the editor.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">provideEditorComponents(definitions)</code>
+            <p>Registers your custom component definitions with the editor.</p>
+          </div>
+        </div>
+
+        <div class="api-group">
+          <h2 class="api-group-title">Components</h2>
+          <div class="api-card">
+            <code class="api-name">AdminPanelComponent</code>
+            <p>Layout shell for the editor admin area. Use as a route wrapper with child routes.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">PageManagerComponent</code>
+            <p>Page listing with create, delete, duplicate, and publish actions.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">VisualEditorComponent</code>
+            <p>The drag-and-drop visual editor canvas. Route param: <code>:pageId</code>.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">DynamicRendererComponent</code>
+            <p>Renders a single editor element (section or block) on the public storefront.</p>
+          </div>
+        </div>
+
+        <div class="api-group">
+          <h2 class="api-group-title">Services</h2>
+          <div class="api-card">
+            <code class="api-name">VisualEditorFacade</code>
+            <p>Primary service for all editor operations: sections, elements, undo/redo, page CRUD, and published page retrieval.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">AuthService</code>
+            <p>Authentication state management. Login, logout, token refresh, session signals.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">ShopContextService</code>
+            <p>Provides the current shop domain and shop context for API calls.</p>
+          </div>
+        </div>
+
+        <div class="api-group">
+          <h2 class="api-group-title">Types</h2>
+          <div class="api-card">
+            <code class="api-name">ComponentDefinition</code>
+            <p>Schema for registering custom editor components: type, props, slots, category.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">Page / PageSummary</code>
+            <p>Page data models. <code>Page</code> includes sections; <code>PageSummary</code> is a lightweight listing type.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">PropSchema / PropType</code>
+            <p>Property definition types: <code>string</code>, <code>number</code>, <code>boolean</code>, <code>color</code>, <code>image</code>, <code>select</code>, <code>richtext</code>, and more.</p>
+          </div>
+          <div class="api-card">
+            <code class="api-name">STORE_DOMAIN</code>
+            <p>Injection token. Set to your <code>*.myshopify.com</code> domain for SSR compatibility.</p>
+          </div>
+        </div>
+      </div>
+    }
+
+  </main>
+</div>

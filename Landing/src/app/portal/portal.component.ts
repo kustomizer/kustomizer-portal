@@ -19,7 +19,7 @@ import { AuthFacade } from '../core/facades/auth.facade';
           <a routerLink="/app/stores" routerLinkActive="active">Stores</a>
           <a routerLink="/app/tier" routerLinkActive="active">Change tier</a>
           <a routerLink="/app/team" routerLinkActive="active">Team</a>
-          <a routerLink="/app/install" routerLinkActive="active">Installation</a>
+          <a href="/docs" target="_blank" rel="noopener">Documentation</a>
         </nav>
       </aside>
       <div class="content">

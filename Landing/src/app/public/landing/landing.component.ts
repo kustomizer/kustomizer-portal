@@ -28,6 +28,7 @@ export class LandingComponent {
     { href: '#how-it-works', label: 'How it works' },
     { href: '#differentiation', label: 'Why us' },
     { href: '#faq', label: 'FAQ' },
+    { href: '/docs', label: 'Docs' },
   ];
 
   readonly benefits = [
@@ -326,6 +327,7 @@ export class LandingComponent {
       { label: 'How it Works', href: '#how-it-works' },
       { label: 'Comparison', href: '#differentiation' },
       { label: 'FAQ', href: '#faq' },
+      { label: 'Documentation', href: '/docs' },
     ],
     company: [{ label: 'Contact', href: '/contact' }],
     legal: [
